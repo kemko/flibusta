@@ -1,7 +1,9 @@
 <?php
 include_once(ROOT_PATH . "webroot.php");
+$requested_author_id = (int)$url->var1;
+[$author_id] = author_search_linked_ids($dbh, $requested_author_id);
 $stmt = $dbh->prepare("SELECT * FROM libavtorname LEFT JOIN libapics USING(AvtorId) WHERE avtorid=:id");
-$stmt->bindParam(":id", $url->var1);
+$stmt->bindParam(":id", $author_id);
 $stmt->execute();
 $a = $stmt->fetch();
 
@@ -13,7 +15,7 @@ echo "<div class='col-sm-2 mb-3'>";
 if (isset($a->file)) {
 	echo "<img src='$webroot/extract_author.php?id=$a->avtorid' style='width: 100%;' class='card-image' /><br />";	
 }
-echo "<a class='btn btn-primary mt-2 w-100' href='$webroot/?aid=$a->avtorid'>Книги автора</a>";
+echo "<a class='btn btn-primary mt-2 w-100' href='$webroot/?aid=$author_id'>Книги автора</a>";
 
 try {
 	$stmt = $dbh->prepare("SELECT COUNT(*) cnt FROM fav WHERE user_uuid=:uuid AND avtorid=:id");
@@ -34,7 +36,7 @@ echo "</div>";
 echo "<div class='col-sm-10 mb-3'>";
 
 $stmt = $dbh->prepare("SELECT * FROM libaannotations WHERE AvtorId=:id");
-$stmt->bindParam(":id", $url->var1);
+$stmt->bindParam(":id", $author_id);
 $stmt->execute();
 while ($an = $stmt->fetch()) {
 	echo "$an->title<br />";
@@ -45,4 +47,3 @@ echo '</div>';
 
 
 echo "</div></div></div>";
-

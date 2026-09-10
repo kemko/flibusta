@@ -70,32 +70,36 @@ echo "<form action='$webroot/authors/'>\n";
 
 <?php
 $start = AUTHORS_PAGE * $page;
-
-$stmt = $dbh->prepare("SELECT COUNT(*) cnt FROM libavtorname WHERE lower(libavtorname.lastname) LIKE :letter");
-$stmt->bindParam(":letter", $letter);
-$stmt->execute();
-$cnt = $stmt->fetch()->cnt;
-
-$stmt = $dbh->prepare("SELECT *,
+$search_query = trim((string)($_GET['q'] ?? ''));
+if ($search_query !== '') {
+	$authors = author_search_results($dbh, $search_query, AUTHORS_PAGE, $start);
+	$cnt = author_search_count($dbh, $search_query);
+} else {
+	$stmt = $dbh->prepare("SELECT libavtorname.*, libavtorname.avtorid AS author_id,
 		(SELECT COUNT(*) FROM libavtor WHERE libavtor.avtorid=libavtorname.avtorid) cnt
 		FROM libavtorname
 		LEFT JOIN libapics USING(AvtorId)
 		WHERE LOWER(libavtorname.lastname) LIKE :letter
 		ORDER BY firstname LIMIT " . AUTHORS_PAGE . " OFFSET $start");
-$stmt->bindParam(":letter", $letter);
-$stmt->execute();
+	$stmt->bindParam(":letter", $letter);
+	$stmt->execute();
+	$authors = $stmt->fetchAll(PDO::FETCH_OBJ);
+	$count = $dbh->prepare('SELECT COUNT(*) FROM libavtorname WHERE LOWER(lastname) LIKE :letter');
+	$count->execute([':letter' => $letter]);
+	$cnt = (int)$count->fetchColumn();
+}
 
 echo '<div class="row">';
 show_gpager(ceil($cnt / AUTHORS_PAGE), 5);
-while ($a = $stmt->fetch()) {
-	if ($a->cnt > 0) {
+foreach ($authors as $a) {
+	if (($a->book_count ?? $a->cnt ?? 0) > 0) {
 		echo "<div class='col col-sm-6 mb-3 d-flex justify-content-between'>";
-		echo "<a class='mw-100 rounded-pill author' href='$webroot/author/view/$a->avtorid'>";
-		if ($a->file != '') {
-			echo "<img class='rounded-circle contact' src='$webroot/extract_author.php?id=$a->avtorid' />";	
+		echo "<a class='mw-100 rounded-pill author' href='$webroot/author/view/$a->author_id'>";
+		if (isset($a->file) && $a->file != '') {
+			echo "<img class='rounded-circle contact' src='$webroot/extract_author.php?id=$a->author_id' />";	
 		}
-		echo "&nbsp;$a->lastname $a->firstname $a->middlename $a->nickname&nbsp;</a>";
-		echo "<div class='badge bg-secondary'>$a->cnt</div>";
+		echo "&nbsp;" . htmlspecialchars("$a->lastname $a->firstname $a->middlename $a->nickname") . "&nbsp;</a>";
+		echo "<div class='badge bg-secondary'>" . ($a->book_count ?? $a->cnt) . "</div>";
 		echo "</div>";
 
 	}

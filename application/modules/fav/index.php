@@ -22,6 +22,12 @@ try {
 
 echo '<div class="row">';
 while ($a = $stmt->fetch()) {
+	[$canonical_author_id] = author_search_linked_ids($dbh, (int)$a->avtorid);
+	if ($canonical_author_id !== (int)$a->avtorid) {
+		$name = $dbh->prepare('SELECT * FROM libavtorname LEFT JOIN libapics USING(AvtorId) WHERE avtorid = :id');
+		$name->execute([':id' => $canonical_author_id]);
+		$a = $name->fetch() ?: $a;
+	}
 	echo "<div class='col col-sm-333 mb-3 d-flex justify-content-between'>";
 	echo "<a class='mw-100 rounded-pill author' href='$webroot/author/view/$a->avtorid'>";
 	if ($a->file != '') {

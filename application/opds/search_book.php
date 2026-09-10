@@ -11,7 +11,7 @@ echo <<< _XML
  <link href="$webroot/opds" rel="start" type="application/atom+xml;profile=opds-catalog" />
 _XML;
 
-$q = $_GET['q'];
+$q = trim((string)($_GET['q'] ?? ''));
 $get = "?q=$q";
 
 if ($q == '') {
@@ -20,15 +20,26 @@ if ($q == '') {
 
 //$filter2 = "AND libbook.Title LIKE " . DB::es('%' . $q . '%');
 
+$author_parameters = [];
+$author_filter = '';
+$author_ids = author_search_matching_ids($dbh, $q);
+if ($author_ids !== []) {
+	$placeholders = author_search_placeholders($author_ids, 'search_author_');
+	$author_filter = ' OR EXISTS (SELECT 1 FROM libavtor search_author WHERE search_author.bookid = libbook.bookid AND search_author.avtorid IN (' . $placeholders['sql'] . '))';
+	$author_parameters = $placeholders['parameters'];
+}
 $books = $dbh->prepare("SELECT DISTINCT BookId, libbook.Title as BookTitle,
         (SELECT Body FROM libbannotations WHERE BookId=libbook.BookId LIMIT 1) as Body
 		FROM libbook
 		JOIN libgenre USING(BookId) 
-		WHERE deleted='0' AND libbook.Title LIKE :q
+		WHERE deleted='0' AND (libbook.Title LIKE :q$author_filter)
 		GROUP BY BookId, BookTitle, Body
 		LIMIT 100");
 		$param = '%'.$q.'%';
 $books->bindParam(":q", $param);
+foreach ($author_parameters as $parameter => $value) {
+	$books->bindValue($parameter, $value, PDO::PARAM_INT);
+}
 $books->execute();
 
 while ($b = $books->fetchObject()) {

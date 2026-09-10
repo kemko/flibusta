@@ -3,9 +3,12 @@ header('Content-Type: application/atom+xml; charset=utf-8');
 echo '<?xml version="1.0" encoding="utf-8"?>';echo "\n";
 echo '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/" xmlns:os="http://a9.com/-/spec/opensearch/1.1/" xmlns:opds="https://specs.opds.io/opds-1.2">';
 
-$author_id = $_GET['author_id'];
+$author_id = (int)($_GET['author_id'] ?? 0);
 if ($author_id == '')
     die('author.php called without specifying id');
+
+[$author_id, $linked_author_ids] = author_search_linked_ids($dbh, $author_id);
+$linked_authors = author_search_placeholders($linked_author_ids, 'linked_author_');
 
 $seq_mode = isset($_GET['seq']);
 if (! $seq_mode)  {  
@@ -38,8 +41,10 @@ if ($a = $stmt->fetchObject()){
         _XML;
         $sequences = $dbh->prepare("SELECT distinct sn.seqid seqid, sn.seqname seqname
         from libseqname sn, libseq s, libavtor a 
-        where sn.seqid = s.seqid and s.bookId= a.bookId and a.avtorId= :aid");
-        $sequences->bindParam(":aid", $author_id);
+		where sn.seqid = s.seqid and s.bookId= a.bookId and a.avtorId IN (" . $linked_authors['sql'] . ")");
+		foreach ($linked_authors['parameters'] as $parameter => $value) {
+			$sequences->bindValue($parameter, $value, PDO::PARAM_INT);
+		}
         $sequences->execute();
         while($seq = $sequences->fetchObject()){
             echo "<entry>\n";

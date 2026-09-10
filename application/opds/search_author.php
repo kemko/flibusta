@@ -19,33 +19,18 @@ echo <<< _XML
 </entry>
 _XML;
 
-$q = $_GET['q'];
+$q = trim((string)($_GET['q'] ?? ''));
 
 if ($q == '') {
 	die(':(');
 }
-$queryParam = $q . '%';
-$authors = $dbh->prepare("SELECT *, 
-		(SELECT COUNT(*) FROM libavtor, libbook WHERE 
-		libbook.deleted='0' AND
-		libbook.bookid=libavtor.bookid AND
-		libavtor.avtorid=libavtorname.avtorid) cnt
-		FROM libavtorname
-		WHERE lastname ILIKE :q ORDER BY lastname, firstname");
-		$authors->bindParam(":q", $queryParam);
-		$authors->execute();
-while ($a = $authors->fetch()) {
-	if ($a->cnt > 0) {
+foreach (author_search_results($dbh, $q, OPDS_FEED_COUNT) as $a) {
+	if ($a->book_count > 0) {
 		echo "\n<entry> <updated>$cdt</updated>";
-		echo " <id>tag:author:$a->avtorid</id>";
-		echo " <title>$a->lastname $a->firstname $a->middlename $a->nickname</title>";
-
-		$stmt = $dbh->query("SELECT COUNT(*) as cnt FROM libbook,libavtor WHERE deleted='0' AND libavtor.bookid=libbook.bookid AND libavtor.avtorid=$a->avtorid");
-		$stmt->execute();
-		$books_cnt = $stmt->fetch()->cnt;
-		$stmt = null;
-		echo " <content type='text'>$books_cnt книг</content>";
-		echo " <link href='$webroot/opds/author?author_id=$a->avtorid' type='application/atom+xml;profile=opds-catalog' />";
+		echo " <id>tag:author:$a->author_id</id>";
+		echo " <title>" . htmlspecialchars("$a->lastname $a->firstname $a->middlename $a->nickname", ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</title>";
+		echo " <content type='text'>$a->book_count книг</content>";
+		echo " <link href='$webroot/opds/author?author_id=$a->author_id' type='application/atom+xml;profile=opds-catalog' />";
 		echo '</entry>';
 	}
 }

@@ -1,3 +1,7 @@
+DELETE FROM libavtorname_ts;
+DELETE FROM libbook_ts;
+DELETE FROM libseqname_ts;
+
 INSERT INTO  libavtorname_ts
 select avtorid, to_tsvector('russian', concat(lastname, ' ', middlename, ' ', firstname, ' ', nickname)) vector
 FROM libavtorname
@@ -12,4 +16,3 @@ INSERT INTO  libseqname_ts
 select seqid, to_tsvector('russian', seqname) vector
 FROM libseqname
 ON CONFLICT DO NOTHING;
-

@@ -37,7 +37,9 @@ if (isset($_GET['seq_id'])) {
 
 if (isset($_GET['author_id'])) {
 	$aid = intval($_GET['author_id']);
-	$filter .= 'AND avtorid=:aid ';
+	[$aid, $linked_author_ids] = author_search_linked_ids($dbh, $aid);
+	$linked_authors = author_search_placeholders($linked_author_ids, 'linked_author_');
+	$filter .= 'AND libavtor.avtorid IN (' . $linked_authors['sql'] . ') ';
 	$join .= 'JOIN libavtor USING (bookid) JOIN libavtorname USING (avtorid) ';
 	
 	$display_type = (isset($_GET['display_type']))? ($_GET['display_type'] ?? '') : '';
@@ -73,7 +75,7 @@ echo <<< _XML
 <link href="$webroot/opds/" rel="start" type="application/atom+xml;profile=opds-catalog" />\n
 _XML;
 
-$books = $dbh->prepare("SELECT b.*
+$books = $dbh->prepare("SELECT DISTINCT b.*
 	FROM libbook b
 	$join
 	WHERE
@@ -90,7 +92,9 @@ if (isset($_GET['seq_id'])) {
 }
 
 if (isset($_GET['author_id'])) {
-	$books->bindParam(":aid", $aid);
+	foreach ($linked_authors['parameters'] as $parameter => $value) {
+		$books->bindValue($parameter, $value, PDO::PARAM_INT);
+	}
 }
 
 $books->execute();

@@ -17,9 +17,7 @@ if (isset($_GET['q'])) {
 	if ($_GET['q'] == '') {
 		unset($_SESSION['search']);
 	} else {
-		$get = mb_strtolower($_GET['q']);
-		$search = str_replace(' ', '&', $get);
-		$_SESSION['search'] = $search;
+		$_SESSION['search'] = trim($_GET['q']);
 	}
 }
 
@@ -66,6 +64,8 @@ $filter = '';
 $fcontent = '';
 $join = '';
 $cols = '';
+$author_filter_parameters = [];
+$search_author_parameters = [];
 
 
 $fcontent .= '<div class="btn-group mt-1 me-1" role="group">';
@@ -86,12 +86,15 @@ $fcontent .= '</div>';
 
 if (isset($_SESSION['filter_author'])) {
 	$do_cnt = true;
-	$filter .= 'AND avtorid=:aid ';
+	[$canonical_author_id, $linked_author_ids] = author_search_linked_ids($dbh, (int)$_SESSION['filter_author']);
+	$author_filter = author_search_placeholders($linked_author_ids, 'author_filter_');
+	$filter .= 'AND a.avtorid IN (' . $author_filter['sql'] . ') ';
+	$author_filter_parameters = $author_filter['parameters'];
 	$join .= 'LEFT JOIN libavtor a USING(BookId) ';
 	$stmt = $dbh->prepare("SELECT * FROM libavtorname
 		LEFT JOIN libapics USING(AvtorId)
 		WHERE AvtorId=:id");
-	$stmt->bindParam(":id", $_SESSION['filter_author']);
+	$stmt->bindParam(":id", $canonical_author_id);
 	$stmt->execute();
 	$a = $stmt->fetch();
 
@@ -147,7 +150,14 @@ if (isset($_SESSION['filter_series'])) {
 }
 
 if (isset($_SESSION['search'])) {
-	$filter .= "AND vector @@ to_tsquery('russian', :search) ";
+	$search_author_ids = author_search_matching_ids($dbh, $_SESSION['search']);
+	$filter .= "AND (vector @@ websearch_to_tsquery('russian', :search)";
+	if ($search_author_ids !== []) {
+		$search_author = author_search_placeholders($search_author_ids, 'search_author_');
+		$filter .= ' OR EXISTS (SELECT 1 FROM libavtor search_author WHERE search_author.bookid = b.bookid AND search_author.avtorid IN (' . $search_author['sql'] . '))';
+		$search_author_parameters = $search_author['parameters'];
+	}
+	$filter .= ') ';
 	$join .= 'LEFT JOIN libbook_ts USING(bookid) ';
 
 	$fcontent .= "<div class='badge bg-success p-1 text-white'>";
@@ -176,7 +186,7 @@ echo $fcontent;
 echo "</div>";
 
 
-$sql = "SELECT *, $cols
+$sql = "SELECT DISTINCT b.*, $cols
         (SELECT Body FROM libbannotations WHERE BookId=b.BookId LIMIT 1) Body
 		FROM libbook b
 		$join
@@ -188,8 +198,8 @@ $sql = "SELECT *, $cols
 
 $stmt = $dbh->prepare($sql);
 
-if (isset($_SESSION['filter_author'])) {
-	$stmt->bindParam(":aid", $_SESSION['filter_author']);
+foreach ($author_filter_parameters as $parameter => $value) {
+	$stmt->bindValue($parameter, $value, PDO::PARAM_INT);
 }
 if (isset($_SESSION['filter_genre'])) {
 	$stmt->bindParam(":gid", $_SESSION['filter_genre']);
@@ -202,6 +212,9 @@ if (isset($_SESSION['filter_series'])) {
 }
 if (isset($_SESSION['search'])) {
 	$stmt->bindParam(":search", $_SESSION['search']);
+}
+foreach ($search_author_parameters as $parameter => $value) {
+	$stmt->bindValue($parameter, $value, PDO::PARAM_INT);
 }
 
 
@@ -218,15 +231,15 @@ try {
 }
 
 if (COUNT_BOOKS) {
-	$sql = "SELECT COUNT(*) cnt
+	$sql = "SELECT COUNT(DISTINCT b.bookid) cnt
 		FROM libbook b
 		$join
 		WHERE deleted='0'
 		$filter";
 	$stt = $dbh->prepare($sql);
 
-	if (isset($_SESSION['filter_author'])) {
-		$stt->bindParam(":aid", $_SESSION['filter_author']);
+	foreach ($author_filter_parameters as $parameter => $value) {
+		$stt->bindValue($parameter, $value, PDO::PARAM_INT);
 	}
 	if (isset($_SESSION['filter_genre'])) {
 		$stt->bindParam(":gid", $_SESSION['filter_genre']);
@@ -239,6 +252,9 @@ if (COUNT_BOOKS) {
 	}
 	if (isset($_SESSION['search'])) {
 		$stt->bindParam(":search", $_SESSION['search']);
+	}
+	foreach ($search_author_parameters as $parameter => $value) {
+		$stt->bindValue($parameter, $value, PDO::PARAM_INT);
 	}
 
 	$stt->execute();

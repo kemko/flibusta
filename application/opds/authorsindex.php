@@ -20,22 +20,24 @@ echo <<< _XML
  <link href="$webroot/opds" rel="start" type="application/atom+xml;profile=opds-catalog" />\n
 _XML;
 
+
 $query="
 	SELECT UPPER(SUBSTR(LastName, 1, ".($length_letters + 1).")) as alpha, COUNT(*) as cnt
 	FROM libavtorname
-	WHERE UPPER(SUBSTR(LastName, 1, ".($length_letters + 1).")) SIMILAR TO '".$letters."[A-ZА-Я]'
+	WHERE UPPER(SUBSTR(LastName, 1, ".($length_letters + 1).")) SIMILAR TO :prefix
 	GROUP BY UPPER(SUBSTR(LastName, 1, ".($length_letters + 1)."))
 	ORDER BY alpha";
-$ai = $dbh->query($query);
+$ai = $dbh->prepare($query);
+$ai->execute([':prefix' => $letters . '[A-ZА-Я]']);
 while ($ach = $ai->fetchObject()) {
 	echo "\n<entry> <updated>$cdt</updated>";
 	echo "<id>tag:authors:$ach->alpha</id>";
 	echo "<title>$ach->alpha</title>";
 	echo "<content type='text'>$ach->cnt авторов на $ach->alpha</content>";
 	if ($ach->cnt>500) {
-		$url="$webroot/opds/authorsindex?letters=$ach->alpha";
+		$url="$webroot/opds/authorsindex?letters=" . urlencode($ach->alpha);
 	} else {
-		$url="$webroot/opds/search?by=author&amp;q=$ach->alpha";
+		$url="$webroot/opds/search?by=author&amp;q=" . urlencode($ach->alpha);
 	}
 	echo "<link href='$url' type='application/atom+xml;profile=opds-catalog' />";
 	echo "</entry>";

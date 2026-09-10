@@ -33,6 +33,7 @@ $SQL_CMD -f /application/tools/cleanup_db.sql
 
 echo "Обновление полнотекстовых индексов">>/application/sql/status
 $SQL_CMD -f /application/tools/update_vectors.sql
+php /application/author_search.php
 
 echo "Создание индекса zip-файлов">>/application/sql/status
 php /application/tools/app_update_zip_list.php
