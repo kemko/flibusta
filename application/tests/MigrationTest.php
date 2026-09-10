@@ -32,7 +32,7 @@ final class MigrationTest extends TestCase {
 
 	public function testMigrationFilesAreOrderedAndStable(): void {
 		$files = app_migration_files(dirname(__DIR__) . '/tools/migrations');
-		self::assertSame(['001_library_extensions.sql'], array_map('basename', $files));
+		self::assertSame(['001_library_extensions.sql', '002_book_index_worker.sql'], array_map('basename', $files));
 		self::assertSame($files, app_migration_files(dirname(__DIR__) . '/tools/migrations'));
 	}
 }

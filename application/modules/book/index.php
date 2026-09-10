@@ -12,6 +12,7 @@ function nl2p($string) {
 
     return $paragraphs;
 }
+book_presentation_attach_metadata($dbh, [$book]);
 book_info_pg($book, $webroot, true);
 
 echo "<div class='card card-body p-3'><ul>";

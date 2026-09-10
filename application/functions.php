@@ -81,6 +81,62 @@ function pg_array_parse($literal){
     return $values;
 }
 
+function book_presentation_attach_metadata(PDO $dbh, array $books): array {
+	$ids = [];
+	foreach ($books as $book) {
+		if (isset($book->bookid)) {
+			$ids[] = (int)$book->bookid;
+		}
+	}
+	$ids = array_values(array_unique(array_filter($ids)));
+	if ($ids === []) {
+		return $books;
+	}
+	$parameters = [];
+	$placeholders = [];
+	foreach ($ids as $index => $id) {
+		$key = ':id' . $index;
+		$placeholders[] = $key;
+		$parameters[$key] = $id;
+	}
+	$in = implode(', ', $placeholders);
+	$metadata = [];
+	try {
+		$query = $dbh->prepare("SELECT DISTINCT ON (entries.bookid) entries.bookid, extracted.illustration_count, extracted.translators FROM book_archive_entries entries JOIN book_extracted_metadata extracted USING (entry_id) WHERE entries.scan_state = 'complete' AND entries.bookid IN ({$in}) ORDER BY entries.bookid, extracted.extracted_at DESC");
+		$query->execute($parameters);
+		while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+			$metadata[(int)$row['bookid']] = [
+				'illustration_count' => $row['illustration_count'] === null ? null : (int)$row['illustration_count'],
+				'translators' => json_decode((string)$row['translators'], true) ?: [],
+			];
+		}
+		$translators = $dbh->prepare("SELECT translator.bookid, array_agg(trim(concat_ws(' ', name.lastname, name.firstname, name.middlename, name.nickname)) ORDER BY translator.pos) AS names FROM libtranslator translator JOIN libavtorname name ON name.avtorid = translator.translatorid WHERE translator.bookid IN ({$in}) GROUP BY translator.bookid");
+		$translators->execute($parameters);
+		while ($row = $translators->fetch(PDO::FETCH_ASSOC)) {
+			$metadata[(int)$row['bookid']]['primary_translators'] = pg_array_parse((string)$row['names']) ?: [];
+		}
+	} catch (PDOException $error) {
+		// Imported library tables may be absent while the service is being initialized.
+	}
+	foreach ($books as $book) {
+		if (!isset($book->bookid)) {
+			continue;
+		}
+		$value = $metadata[(int)$book->bookid] ?? [];
+		$book->illustration_count = $value['illustration_count'] ?? null;
+		$book->translator_names = $value['primary_translators'] ?? ($value['translators'] ?? []);
+	}
+	return $books;
+}
+
+function book_presentation_details($book): string {
+	$illustrations = property_exists($book, 'illustration_count') && $book->illustration_count !== null
+		? 'Иллюстраций: ' . (int)$book->illustration_count
+		: 'Иллюстраций: неизвестно';
+	$translators = property_exists($book, 'translator_names') ? array_filter((array)$book->translator_names) : [];
+	return htmlspecialchars($illustrations, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ($translators === [] ? '' : '<br>Перевод: ' . htmlspecialchars(implode(', ', $translators), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+}
+
 function to_pg_array($set) {
     settype($set, 'array'); // can be called with a scalar or array
     $result = array();
@@ -136,6 +192,7 @@ function book_small_pg($book, $webroot='',$full = false) {
 	}
 
 	echo "<div>$book->title</div></a>";
+	echo "<small>" . book_presentation_details($book) . "</small>";
 	echo "<div class='btn-group w-100 mt-auto' role='group'>";
 	echo "<button type='button' class='btn btn-outline-secondary btn-sm'>$year</button>";
 	echo "<a href='$fhref' title='Скачать' type='button' class='btn btn-outline-$ft btn-sm'>$book->filetype</a>";
@@ -237,6 +294,10 @@ function book_info_pg($book, $webroot = '', $full = false) {
 		}
 		echo "</a> ";
 	}
+	echo "</div>";
+
+	echo "<div style='margin-bottom: 3px;'>";
+	echo "<small>" . book_presentation_details($book) . "</small>";
 	echo "</div>";
 
 	echo "<div style='margin-bottom: 3px;'>";
@@ -641,6 +702,7 @@ function opds_book($b,$webroot = '') {
 	echo "\n Формат: $b->filetype";
 	echo "\n Язык: $b->lang";
 	echo "\n Размер: " . formatSizeUnits($b->filesize);
+	echo "\n " . strip_tags(book_presentation_details($b));
 	echo "\n </summary>";
 
 	echo "\n <link rel='http://opds-spec.org/image/thumbnail' href='$webroot/extract_cover.php?id=$b->bookid' type='image/jpeg'/>";

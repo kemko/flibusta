@@ -67,11 +67,12 @@ $cnt = $stmt->rowCount();
 
 //show_gpager(ceil($cnt / RECORDS_PAGE), 5);
 
+ $book_list = book_presentation_attach_metadata($dbh, $stmt->fetchAll());
 echo "<div class='contaner'>";
 echo "<div class='row equal'>";
 
 $c = 0;
-while ($book = $stmt->fetch()) {
+foreach ($book_list as $book) {
 	$c++;
 	if ($c > 10) {
 //		break;
@@ -82,4 +83,3 @@ echo "</div>";
 echo "</div>";
 
 //show_gpager(ceil($cnt / RECORDS_PAGE), 5);
-

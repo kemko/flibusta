@@ -94,8 +94,9 @@ if (isset($_GET['author_id'])) {
 }
 
 $books->execute();
+$book_list = book_presentation_attach_metadata($dbh, $books->fetchAll());
 
-while ($b = $books->fetch()) {
+foreach ($book_list as $b) {
 	opds_book($b, $webroot);
 }
 

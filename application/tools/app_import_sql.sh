@@ -1,5 +1,6 @@
 #!/bin/sh
 source /application/tools/dbinit.sh
+php /application/tools/app_migrate.php
 
 mkdir -p /application/sql/psql
 mkdir -p /application/cache/authors
@@ -36,5 +37,7 @@ $SQL_CMD -f /application/tools/update_vectors.sql
 echo "Создание индекса zip-файлов">>/application/sql/status
 php /application/tools/app_update_zip_list.php
 
-echo "">/application/sql/status
+echo "Сканирование метаданных книг">>/application/sql/status
+php /application/tools/app_worker.php
 
+echo "">/application/sql/status

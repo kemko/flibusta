@@ -22,8 +22,9 @@ $books = $dbh->prepare("SELECT DISTINCT b.*
 		WHERE user_uuid=:uuid AND f.bookid IS NOT NULL");
 $books->bindParam(":uuid", $uuid);
 $books->execute();
+$book_list = book_presentation_attach_metadata($dbh, $books->fetchAll());
 
-while ($b = $books->fetch()) {
+foreach ($book_list as $b) {
 	opds_book($b, $webroot);
 }
 

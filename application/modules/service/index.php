@@ -69,7 +69,7 @@ if ($status_import) {
 echo "<div class='d-flex justify-content-between'>";
 echo "<a class='btn btn-primary m-1 $status' href='?import=sql'>Обновить базу</a> ";
 echo "<a class='btn btn-warning m-1' href='?empty=cache'>Очистить кэш</a> ";
-echo "<a class='btn btn-warning m-1' href='?reindex'>Сканирование ZIP</a> ";
+echo "<a class='btn btn-warning m-1' href='?reindex'>Сканировать ZIP и метаданные</a> ";
 echo "</div>";
 
 if ($status_import) {
@@ -101,4 +101,3 @@ if ($status_import) {
 <?php echo "<p>Доступен также OPDS-каталог для читалок: <a href='$webroot/opds/'>/opds/</a></p>"; ?>
 <p><b>Каталоги FlibustaSQL, cache и их подкаталоги должны иметь права на запись для контейнера. Скрипты в каталоге /application/tools/ должны иметь права на выполнение.</b></p>
 </div></div></div></div>
-

@@ -43,6 +43,31 @@ services:
         secrets:
             - FLIBUSTA_PWD
 
+    book-worker:
+        build: phpdocker/php-fpm
+        working_dir: /application
+        volumes:
+            - './application:/application'
+            - './Flibusta.Net:/application/flibusta'
+            - './cache:/application/cache'
+        environment:
+            - FLIBUSTA_DBUSER=flibusta
+            - FLIBUSTA_DBNAME=flibusta
+            - FLIBUSTA_DBTYPE=postgres
+            - FLIBUSTA_DBHOST=postgres
+            - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
+        secrets:
+            - FLIBUSTA_PWD
+        command: >
+            sh -ec 'while true; do
+            php /application/tools/app_migrate.php;
+            php /application/tools/app_scan_books.php;
+            php /application/tools/app_worker.php;
+            php /application/tools/app_worker.php --retry-errors;
+            sleep 60;
+            done'
+        restart: unless-stopped
+
 
 volumes:
     db-data:

@@ -34,3 +34,7 @@ if ($handle = opendir('/application/flibusta')) {
 	$dbh->commit();
 	closedir($handle);
 }
+
+require_once __DIR__ . '/app_scan_books.php';
+book_index_scan_archives($dbh, flibusta_config()['directories']['books']);
+book_index_reconcile_entries($dbh);
