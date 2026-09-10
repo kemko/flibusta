@@ -12,13 +12,10 @@ echo <<< _XML
 _XML;
 
 $q = trim((string)($_GET['q'] ?? ''));
-$get = "?q=$q";
-
 if ($q == '') {
-	die(':(');
+	echo '</feed>';
+	return;
 }
-
-//$filter2 = "AND libbook.Title LIKE " . DB::es('%' . $q . '%');
 
 $author_parameters = [];
 $author_filter = '';
@@ -28,12 +25,10 @@ if ($author_ids !== []) {
 	$author_filter = ' OR EXISTS (SELECT 1 FROM libavtor search_author WHERE search_author.bookid = libbook.bookid AND search_author.avtorid IN (' . $placeholders['sql'] . '))';
 	$author_parameters = $placeholders['parameters'];
 }
-$books = $dbh->prepare("SELECT DISTINCT BookId, libbook.Title as BookTitle,
-        (SELECT Body FROM libbannotations WHERE BookId=libbook.BookId LIMIT 1) as Body
+$books = $dbh->prepare("SELECT libbook.*
 		FROM libbook
-		JOIN libgenre USING(BookId) 
 		WHERE deleted='0' AND (libbook.Title LIKE :q$author_filter)
-		GROUP BY BookId, BookTitle, Body
+		ORDER BY bookid
 		LIMIT 100");
 		$param = '%'.$q.'%';
 $books->bindParam(":q", $param);
@@ -42,28 +37,8 @@ foreach ($author_parameters as $parameter => $value) {
 }
 $books->execute();
 
-while ($b = $books->fetchObject()) {
-	echo " <entry> <updated>$cdt</updated>";
-	echo " <id>tag:book:$b->bookid</id>";
-	echo " <title>" . htmlspecialchars($b->booktitle) . "</title>";
-
-	$as = '';
-	$authors = $dbh->query("SELECT lastname, firstname, middlename FROM libavtorname, libavtor WHERE libavtor.BookId=$b->bookid AND libavtor.AvtorId=libavtorname.AvtorId ORDER BY LastName");
-	while ($a = $authors->fetchObject()) {
-		$as .= $a->lastname . " " . $a->firstname . " " . $a->middlename . ", ";
-	}
-	$authors = null;
-
-	echo "<author> <name>$as</name>";
-	echo " <uri>/a/id</uri>";
-	echo "</author>";
-	echo " <content type='text/html'>" . htmlspecialchars($b->body ?? '') . "</content>";
-
-	echo "<link rel='http://opds-spec.org/image/thumbnail' href='$webroot/extract_cover.php?id=$b->bookid' type='image/jpeg'/>";
-	echo "<link rel='http://opds-spec.org/image' href='$webroot/extract_cover.php?id=$b->bookid' type='image/jpeg'/>";
-	echo " <link href='$webroot/fb2.php?id=$b->bookid' rel='http://opds-spec.org/acquisition/open-access' type='application/fb2+zip' />";
-
-	echo "</entry>\n";
+foreach (book_presentation_attach_metadata($dbh, $books->fetchAll()) as $b) {
+	opds_book($b, $webroot);
 }
 $books = null;
 ?>

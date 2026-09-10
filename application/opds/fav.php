@@ -13,7 +13,7 @@ echo <<< _XML
 <link href="$webroot/opds/search?q={searchTerms}" rel="search" type="application/atom+xml" />
 <link href="$webroot/opds/" rel="start" type="application/atom+xml;profile=opds-catalog" />
 _XML;
-echo "<link href=".$webroot.'/opds/fav/?uuid='.$_GET['uuid'].' rel="self" type="application/atom+xml;profile=opds-catalog" />';
+echo '<link href="' . htmlspecialchars($webroot . '/opds/fav/?uuid=' . rawurlencode($_GET['uuid']), ENT_QUOTES | ENT_XML1, 'UTF-8') . '" rel="self" type="application/atom+xml;profile=opds-catalog" />';
  
 $uuid = $_GET['uuid'];
 $books = $dbh->prepare("SELECT DISTINCT b.*

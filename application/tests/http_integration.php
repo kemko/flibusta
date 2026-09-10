@@ -31,6 +31,19 @@ function request(string $base, string $path, array $headers = [], ?array $post =
 	curl_close($curl);
 	return [$status, substr($response, $header_size), substr($response, 0, $header_size)];
 }
+function opds_xml(string $body): DOMXPath {
+	$previous = libxml_use_internal_errors(true);
+	libxml_clear_errors();
+	$document = new DOMDocument();
+	$loaded = $document->loadXML($body, LIBXML_NONET);
+	$errors = libxml_get_errors();
+	libxml_clear_errors();
+	libxml_use_internal_errors($previous);
+	check($loaded && $errors === [], 'Invalid OPDS XML: ' . $body);
+	$xpath = new DOMXPath($document);
+	$xpath->registerNamespace('atom', 'http://www.w3.org/2005/Atom');
+	return $xpath;
+}
 
 $env = getenv();
 $admin = new PDO('pgsql:host=' . $env['FLIBUSTA_DBHOST'] . ';dbname=' . $env['FLIBUSTA_DBNAME'], $env['FLIBUSTA_DBUSER'], $env['FLIBUSTA_DBPASSWORD'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -99,6 +112,7 @@ try {
 	check(request($base, '/opds/', $basic)[0] === 200, 'OPDS catalog failed');
 	[$status, $series] = request($base, '/opds/list?seq_id=1', $basic);
 	check($status === 200 && str_contains($series, 'HTTP book'), 'OPDS series feed failed');
+	opds_xml($series);
 	[$status, $search] = request($base, '/opds/search?by=author&q=Writer', $basic);
 	check($status === 200 && str_contains($search, 'Writer'), 'OPDS search failed');
 	[$status, $alphabet] = request($base, '/opds/authorsindex', $basic);
@@ -134,6 +148,8 @@ try {
 	check($dbh->query('SELECT state FROM compilation_mail_requests')->fetchColumn() === 'accepted', 'PHP-FPM user could not request SMTP for generated compilation');
 	$original_shelf = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 	$dbh->exec("INSERT INTO fav_users VALUES ('$original_shelf', 'Shared shelf'); INSERT INTO fav (user_uuid, bookid) VALUES ('$original_shelf', 10)");
+	[$status, $shelf] = request($base, '/opds/fav?uuid=' . $original_shelf, $basic);
+	check($status === 200 && opds_xml($shelf)->query('/atom:feed/atom:entry')->length === 1, 'OPDS shelf feed failed');
 	check(str_contains(request($base, '/favlist/', $cookie)[1], $original_shelf), 'Existing shelf is hidden after login');
 	check(request($base, '/', $cookie, ['login_uuid' => $original_shelf])[0] === 403, 'Shelf selection lacks CSRF gate');
 	request($base, '/', $cookie, ['csrf' => $csrf, 'new_uuid' => 'Shared shelf']);
@@ -143,6 +159,44 @@ try {
 	check((int)$dbh->query("SELECT count(*) FROM fav WHERE user_uuid = '$original_shelf'")->fetchColumn() === 1, 'Deleting new shelf changed original favorites');
 	request($base, '/', $cookie, ['csrf' => $csrf, 'login_uuid' => $original_shelf]);
 	check(str_contains(request($base, '/favlist/', $cookie)[1], 'name="delete_uuid" value="' . $original_shelf . '"'), 'Cannot select existing shelf after fresh login');
+	// More than one page across canonical and alias identities, including a duplicate association.
+	$dbh->exec("INSERT INTO libavtorname (avtorid, lastname, firstname, email, homepage, masterid) VALUES (2, 'Alias', 'Writer', '', '', 1)");
+	$dbh->exec("INSERT INTO libbook (bookid, title, title1, filetype, keywords, md5, fileauthor) SELECT id, 'Paged book', '', 'fb2', '', decode(md5(id::text), 'hex'), '' FROM generate_series(1000,1099) id; INSERT INTO libavtor (bookid, avtorid) SELECT id, CASE WHEN id % 2 = 0 THEN 1 ELSE 2 END FROM generate_series(1000,1099) id; INSERT INTO libavtor (bookid, avtorid) VALUES (10, 2)");
+	author_search_rebuild($dbh);
+	$path = '/opds/list?author_id=2&display_type=alphabet';
+	$ids = [];
+	$pages = 0;
+	do {
+		[$status, $body] = request($base, $path, $basic);
+		check($status === 200, 'OPDS author page failed');
+		$xml = opds_xml($body);
+		foreach ($xml->query('/atom:feed/atom:entry/atom:id') as $id) { $ids[] = $id->textContent; }
+		$path = $xml->evaluate('string(/atom:feed/atom:link[@rel="next"]/@href)');
+		check(++$pages <= 2, 'OPDS author pagination did not terminate');
+		check($path === '' || (str_contains($path, 'author_id=2') && str_contains($path, 'display_type=alphabet')), 'OPDS pagination lost filters');
+	} while ($path !== '');
+	check($pages === 2 && count($ids) === 101 && count(array_unique($ids)) === 101, 'Alias pagination omitted or duplicated books');
+	// Actual search acquisition must select the non-FB2 endpoint and preserve XML metacharacters.
+	$dbh->exec("INSERT INTO libbook (bookid, title, title1, filetype, keywords, md5, fileauthor) VALUES (11, 'EPUB & test', '', 'epub', 'A & B', decode(md5('epub'), 'hex'), ''); INSERT INTO libavtor (bookid, avtorid) VALUES (11, 1)");
+	$dbh->exec("UPDATE libseqname SET seqname = 'Series & notes' WHERE seqid = 1; INSERT INTO libseq (bookid, seqid, seqnumb) VALUES (11, 1, 3)");
+	$dbh->exec("UPDATE libavtorname SET lastname = 'Writer & O''Brien' WHERE avtorid = 1");
+	$zip = new ZipArchive();
+	$zip->open($directory . '/source.epub', ZipArchive::CREATE);
+	$zip->addFromString('META-INF/container.xml', '<container><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
+	$zip->addFromString('content.opf', '<package><manifest/></package>');
+	$zip->close();
+	$epub = file_get_contents($directory . '/source.epub');
+	$zip->open($directory . '/f.usr-1-20.zip', ZipArchive::CREATE);
+	$zip->addFromString('11.epub', $epub);
+	$zip->close();
+	run_command(web_user_command([PHP_BINARY, '/application/tools/app_scan_books.php']), $env);
+	[$status, $body] = request($base, '/opds/search?by=book&q=EPUB', $basic);
+	check($status === 200, 'OPDS EPUB search failed');
+	$xml = opds_xml($body);
+	$link = $xml->query('/atom:feed/atom:entry/atom:link[@rel="http://opds-spec.org/acquisition/open-access"]')->item(0);
+	check($link instanceof DOMElement && $link->getAttribute('type') === 'application/epub+zip', 'OPDS EPUB acquisition type is wrong');
+	[$status, $download] = request($base, $link->getAttribute('href'), $basic);
+	check($status === 200 && $download === $epub, 'EPUB acquisition did not return original bytes');
 	flibusta_opds_revoke_key($dbh, $key['key_id'], 'http-owner');
 	foreach (['/opds/', '/opds/search?by=author&q=Writer', '/fb2.php?id=10'] as $path) {
 		check(request($base, $path, $basic)[0] === 401, 'Revoked key accepted: ' . $path);

@@ -166,6 +166,14 @@ function book_metadata_epub(string $data, array $limits = []): array {
 			throw new BookMetadataException('Invalid EPUB archive');
 		}
 		$opened = true;
+		$total_bytes = 0;
+		for ($index = 0; $index < $zip->numFiles; $index++) {
+			$entry = $zip->statIndex($index);
+			if ($entry === false || !isset($entry['size']) || $entry['size'] > $limits['entry_bytes'] - $total_bytes) {
+				throw new BookMetadataException('EPUB decompressed size exceeds limit');
+			}
+			$total_bytes += $entry['size'];
+		}
 		$container = book_metadata_xml(book_metadata_epub_entry($zip, 'META-INF/container.xml', $limits['entry_bytes']));
 		$xpath = new DOMXPath($container);
 		$rootfile = $xpath->query('//*[local-name()="rootfile" and @media-type="application/oebps-package+xml"]')->item(0);
@@ -225,17 +233,6 @@ function book_metadata_epub(string $data, array $limits = []): array {
 				$guide_hrefs[] = $href;
 			}
 		}
-		$images = [];
-		foreach ($manifest as $id => $item) {
-			try {
-				$image = book_metadata_epub_entry($zip, $item['path'], $limits['entry_bytes']);
-			} catch (BookMetadataException $error) {
-				continue;
-			}
-			if (book_metadata_image_mime($image) !== null) {
-				$images[$id] = $image;
-			}
-		}
 		foreach ($guide_hrefs as $href) {
 			$path = book_metadata_resolve_path($opf_dir, $href);
 			if ($path === null) {
@@ -263,6 +260,20 @@ function book_metadata_epub(string $data, array $limits = []): array {
 			} catch (BookMetadataException $error) {
 				continue;
 			}
+		}
+		$images = [];
+		$cover_loaded = false;
+		foreach ($manifest as $id => $item) {
+			// Signatures suffice for counting; retain bytes only for the selected cover.
+			$image = $zip->getFromName($item['path'], 12);
+			if ($image === false || book_metadata_image_mime($image) === null) {
+				continue;
+			}
+			if (!$cover_loaded && in_array($id, $cover_ids, true)) {
+				$image = book_metadata_epub_entry($zip, $item['path'], $limits['entry_bytes']);
+				$cover_loaded = true;
+			}
+			$images[$id] = $image;
 		}
 		return book_metadata_result($translators, $images, $cover_ids);
 	} finally {

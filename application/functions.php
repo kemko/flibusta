@@ -655,7 +655,7 @@ function opds_book($b,$webroot = '') {
 	$genres->bindParam(":id", $b->bookid);
 	$genres->execute();
 	while ($g = $genres->fetch()) {
-		echo "<category term='$webroot/subject/" . urlencode($g->genrecode) . "' label='$g->genredesc'/>";
+		echo "<category term='$webroot/subject/" . urlencode($g->genrecode) . "' label='" . htmlspecialchars($g->genredesc, ENT_QUOTES | ENT_XML1, 'UTF-8') . "'/>";
 	}
 
 	$sq = '';
@@ -670,7 +670,7 @@ function opds_book($b,$webroot = '') {
 			$ssq .= " ($s->seqnumb) ";
 		}
 		$sq .= $ssq;
-		echo " <link href='$webroot/opds/list?seq_id=".$s->seqid."' rel='related' type='application/atom+xml' title='Все книги серии &quot;$ssq&quot;' />";
+		echo " <link href='$webroot/opds/list?seq_id=".$s->seqid."' rel='related' type='application/atom+xml' title='Все книги серии &quot;" . htmlspecialchars($ssq, ENT_QUOTES | ENT_XML1, 'UTF-8') . "&quot;' />";
 	}
 	if ($sq != '') {
 		$sq = "Сборник: $sq";
@@ -685,13 +685,13 @@ function opds_book($b,$webroot = '') {
 	$au->bindParam(":id", $b->bookid);
 	$au->execute();
 	while ($a = $au->fetch()) {
-		echo "<name>$a->lastname $a->firstname $a->middlename</name>";
+		echo '<name>' . htmlspecialchars("$a->lastname $a->firstname $a->middlename", ENT_QUOTES | ENT_XML1, 'UTF-8') . '</name>';
 		echo "<uri>/opds/author?author_id=$a->avtorid</uri>";
 	}
 	echo "</author>";
 	$au->execute();
 	while ($a = $au->fetch()) {
-		echo "\n <link href='$webroot/opds/list?author_id=$a->avtorid' rel='related' type='application/atom+xml' title='Все книги автора $a->lastname $a->firstname $a->middlename' />";
+		echo "\n <link href='$webroot/opds/list?author_id=$a->avtorid' rel='related' type='application/atom+xml' title='Все книги автора " . htmlspecialchars("$a->lastname $a->firstname $a->middlename", ENT_QUOTES | ENT_XML1, 'UTF-8') . "' />";
 	}
 	echo " <dc:language>" . trim($b->lang) . "</dc:language>";
 	if ($b->year > 0) {
@@ -701,12 +701,12 @@ function opds_book($b,$webroot = '') {
 	// Include the type of the book as <dc:format> element
 	echo " <dc:format>" . trim($b->filetype) . "</dc:format>";
 	
-	// Include the size of the book as <dcterms:extent> element using the FileSize attribute from $b
-	echo " <dcterms:extent>" . formatSizeUnits($b->filesize) . " bytes</dcterms:extent>";
+	// Include the size using the declared Dublin Core namespace.
+	echo " <dc:extent>" . formatSizeUnits($b->filesize) . " bytes</dc:extent>";
 	
-	echo "\n <summary type='text'>" . strip_tags($an);
-	echo "\n $sq ";
-	echo "\n $b->keywords";
+	echo "\n <summary type='text'>" . htmlspecialchars(strip_tags($an), ENT_QUOTES | ENT_XML1, 'UTF-8');
+	echo "\n " . htmlspecialchars($sq, ENT_QUOTES | ENT_XML1, 'UTF-8');
+	echo "\n " . htmlspecialchars($b->keywords, ENT_QUOTES | ENT_XML1, 'UTF-8');
 	if ($b->year > 0) {
 		echo "\n Год издания: $b->year";
 	}
@@ -723,7 +723,8 @@ function opds_book($b,$webroot = '') {
 	} else {
 		$ur = 'usr';
 	}
-	echo "\n <link href='$webroot/$ur.php?id=$b->bookid' rel='http://opds-spec.org/acquisition/open-access' type='application/" . trim($b->filetype) . "' />";
+	$mime = ['fb2' => 'application/x-fictionbook+xml', 'epub' => 'application/epub+zip'][trim($b->filetype)] ?? 'application/' . trim($b->filetype);
+	echo "\n <link href='$webroot/$ur.php?id=$b->bookid' rel='http://opds-spec.org/acquisition/open-access' type='$mime' />";
 	echo "\n <link href='$webroot/book/view/$b->bookid' rel='alternate' type='text/html' title='Книга на сайте' />";
 
 	echo "</entry>\n";

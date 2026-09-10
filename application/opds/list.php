@@ -24,7 +24,7 @@ if (isset($_GET['genre_id'])) {
 
 if (isset($_GET['seq_id'])) {
 	$sid = intval($_GET['seq_id']);
-	$filter .= 'AND seqid=:sid';
+	$filter .= 'AND seqid=:sid ';
 	$join .= 'LEFT JOIN libseq s USING(BookId) ';
 	$orderby = " s.seqnumb ";
 	$stmt = $dbh->prepare("SELECT * FROM libseqname
@@ -66,7 +66,7 @@ echo <<< _XML
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/" xmlns:os="http://a9.com/-/spec/opensearch/1.1/" xmlns:opds="http://opds-spec.org/2010/catalog">
 <id>tag:root:home</id>
 _XML;
-echo "<title>Книги $title</title>";
+echo '<title>Книги ' . htmlspecialchars($title, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</title>';
 echo "<updated>$cdt</updated>";
 echo <<< _XML
 <icon>/favicon.ico</icon>
@@ -76,13 +76,15 @@ echo <<< _XML
 _XML;
 
 $sequence_column = isset($_GET['seq_id']) ? ', s.seqnumb' : '';
+$page = max(0, (int)($_GET['page'] ?? 0));
 $books = $dbh->prepare("SELECT DISTINCT b.* $sequence_column
 	FROM libbook b
 	$join
 	WHERE
 	$filter
-	ORDER BY $orderby
-	LIMIT ". OPDS_FEED_COUNT);
+	ORDER BY $orderby, b.bookid
+	LIMIT " . (OPDS_FEED_COUNT + 1) . ' OFFSET :offset');
+$books->bindValue(':offset', $page * OPDS_FEED_COUNT, PDO::PARAM_INT);
 
 if (isset($_GET['genre_id'])) {
 	$books->bindParam(":gid", $gid);
@@ -99,7 +101,14 @@ if (isset($_GET['author_id'])) {
 }
 
 $books->execute();
-$book_list = book_presentation_attach_metadata($dbh, $books->fetchAll());
+$book_list = $books->fetchAll();
+if (count($book_list) > OPDS_FEED_COUNT) {
+	$params = array_intersect_key($_GET, array_flip(['genre_id', 'seq_id', 'author_id', 'display_type']));
+	$params['page'] = $page + 1;
+	$next = htmlspecialchars($webroot . '/opds/list?' . http_build_query($params), ENT_QUOTES | ENT_XML1, 'UTF-8');
+	echo '<link href="' . $next . '" rel="next" type="application/atom+xml;profile=opds-catalog" />';
+}
+$book_list = book_presentation_attach_metadata($dbh, array_slice($book_list, 0, OPDS_FEED_COUNT));
 
 foreach ($book_list as $b) {
 	opds_book($b, $webroot);

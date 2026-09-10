@@ -67,6 +67,31 @@ final class BookMetadataTest extends TestCase {
 		self::assertSame(['EPUB 3 Translator'], book_metadata_extract('epub', file_get_contents($path))['translators']);
 	}
 
+	public function testNestedEpubLimitsAndImageCountingStayWithinMemoryBudget(): void {
+		foreach ([[7, 20, '128M', 'limited'], [8, 4, '32M', '8']] as [$count, $image_mib, $memory, $expected]) {
+			$path = $this->directory . '/images.epub';
+			$image = $this->directory . '/image.png';
+			file_put_contents($image, "\x89PNG\r\n\x1A\n" . str_repeat('x', $image_mib * 1024 * 1024));
+			$zip = new ZipArchive();
+			self::assertTrue($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+			$zip->addFromString('META-INF/container.xml', '<container><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
+			$manifest = '';
+			for ($index = 0; $index < $count; $index++) {
+				$manifest .= '<item id="i' . $index . '" href="' . $index . '.png"/>';
+				$zip->addFile($image, $index . '.png');
+			}
+			$zip->addFromString('content.opf', '<package><manifest>' . $manifest . '</manifest></package>');
+			$zip->close();
+			$script = 'require ' . var_export(dirname(__DIR__) . '/book_metadata.php', true) . '; try { echo book_metadata_epub(file_get_contents($argv[1]))["illustration_count"]; } catch (BookMetadataException $error) { if ($error->getMessage() !== "EPUB decompressed size exceeds limit") { throw $error; } echo "limited"; }';
+			$process = proc_open([PHP_BINARY, '-d', 'memory_limit=' . $memory, '-r', $script, $path], [1 => ['pipe', 'w'], 2 => ['redirect', 1]], $pipes);
+			self::assertIsResource($process);
+			$output = stream_get_contents($pipes[1]);
+			fclose($pipes[1]);
+			self::assertSame(0, proc_close($process), $output);
+			self::assertSame($expected, $output);
+		}
+	}
+
 	public function testRejectsCorruptArchivesAndUnsafeEpubPaths(): void {
 		try {
 			book_metadata_extract('epub', 'not a zip');
