@@ -34,18 +34,16 @@ function str_replace_first($from, $to, $content) {
 
 
 $ext = strtolower(trim($book->filetype));
-
-if ($ext == 'fb2') {
-	$stmt = $dbh->prepare("SELECT * FROM book_zip WHERE $url->var1 BETWEEN start_id AND end_id AND usr=0");
-} else {
-	$stmt = $dbh->prepare("SELECT * FROM book_zip WHERE $url->var1 BETWEEN start_id AND end_id AND usr=1");
+$book_data = null;
+try {
+	$book_file = book_file_find($dbh, (int)$url->var1);
+	$book_data = book_file_contents($book_file);
+} catch (BookFileException $error) {
+	echo '<div class="alert alert-warning">Файл книги недоступен.</div>';
 }
-$stmt->execute();
-$zip_name = $stmt->fetch()->filename;
-$zip = new ZipArchive(); 
 
 echo "<div id='reader' class='reader'>";
-if ($zip->open(ROOT_PATH . "flibusta/" . $zip_name)) {
+if ($book_data !== null) {
 	if ($ext == 'fb2') {
 		include('fb.php');
 	}
@@ -82,7 +80,6 @@ if ($zip->open(ROOT_PATH . "flibusta/" . $zip_name)) {
 		include('html.php');
 	}
 
-	$zip->close();
 }
 
 

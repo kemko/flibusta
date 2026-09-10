@@ -1,9 +1,9 @@
 <?php
-if (isset($_GET['id'])) {
-	$id = $_GET['id'];
-} else {
+if (!isset($_GET['id']) || filter_var($_GET['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+	http_response_code(404);
 	die();
 }
+$id = (int)$_GET['id'];
 error_reporting(E_ALL);
 include('../init.php');
 
@@ -22,12 +22,12 @@ $stmt->execute();
 $book = $stmt->fetch();
 
 
-$stmt = $dbh->prepare("SELECT * FROM book_zip WHERE $id BETWEEN start_id AND end_id AND usr=0");
-$stmt->execute();
-$zip_name = $stmt->fetch()->filename;
-$zip = new ZipArchive();
-
-if ($zip->open(ROOT_PATH . "flibusta/" . $zip_name)) {
+try {
+	$file = book_file_find($dbh, $id);
+	if ($file['format'] !== 'fb2') {
+		throw new BookFileException('Not an FB2 book');
+	}
+	$data = book_file_contents($file);
 	$filename = $book->author_name . " - " . $book->booktitle . " " . $id . ".fb2";
 	header('Content-Description: File Transfer');
 	header('Content-Type: application/octet-stream');
@@ -36,11 +36,10 @@ if ($zip->open(ROOT_PATH . "flibusta/" . $zip_name)) {
 	header('Expires: 0');
 	header('Cache-Control: must-revalidate');
 	header('Pragma: public');
-	echo $zip->getFromName("$id.fb2");
-	$zip->close();
-} else {
-	echo "NO ZIP";
+	echo $data;
+} catch (BookFileException $error) {
+	http_response_code(404);
+	echo 'Book file is unavailable';
 }
-
 
 

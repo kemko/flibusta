@@ -33,7 +33,7 @@ if ($user_uuid != "") {
 
 
 $content = '';
-$data = $zip->getFromName("$url->var1.fb2");
+$data = $book_data;
 
 $fb2 = simplexml_load_string($data);
 echo ($fb2 ? '' : 'FB2 Parse Error'), PHP_EOL;
@@ -66,4 +66,3 @@ if (isset($fb2->body->section)) {
 	$content .= $s;
 }
 echo str_replace("<p>***</p>",  '<div class="divider div-transparent div-dot"></div>', str_replace("section>>", "section>", $content));
-

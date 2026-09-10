@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">
+  <description><title-info><coverpage><image l:href="#cover"/></coverpage><translator><first-name>Иван</first-name><last-name>Переводчиков</last-name></translator></title-info></description>
+  <body><section><image l:href="#picture"/><image l:href="#picture"/><image l:href="#webp"/></section></body>
+  <binary id="cover" content-type="image/jpeg">/9j/2Q==</binary>
+  <binary id="picture" content-type="image/png">iVBORw0KGgo=</binary>
+  <binary id="webp" content-type="image/webp">UklGRgAAAABXRUJQ</binary>
+</FictionBook>

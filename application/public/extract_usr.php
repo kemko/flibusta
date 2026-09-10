@@ -1,11 +1,11 @@
 <?php
 include('../init.php');
 
-if (isset($_GET['id'])) {
-	$id = $_GET['id'];
-} else {
-	$id = 610095;
+if (!isset($_GET['id']) || filter_var($_GET['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+	http_response_code(404);
+	die();
 }
+$id = (int)$_GET['id'];
 
 $book = DBO::query("SELECT libbook.Title BookTitle, libbook.FileType, libfilename.filename,
 	CONCAT(libavtorname.LastName, ' ', libavtorname.FirstName) author_name
@@ -15,17 +15,11 @@ $book = DBO::query("SELECT libbook.Title BookTitle, libbook.FileType, libfilenam
 		LEFT JOIN libfilename USING(BookId) 
 		WHERE libbook.BookId=" . DBO::es($id))->fetchObject();
 
-$usr_filename = DBO::query("SELECT * FROM libfilename where BookId=$id")->fetchObject();
-
-
-if ($usr_filename == '') {
-	$usr_filename = trim("$id.$book->filetype");
-}
-
-$zip_name = DBO::query("SELECT * FROM book_zip WHERE ($id BETWEEN start_id AND end_id) AND usr=1")->fetchObject()->filename;
-$zip = new ZipArchive(); 
-
-if ($zip->open("/work/fb/Flibusta.Net/" . $zip_name)) {
+try {
+	$file = book_file_find($dbh, $id);
+	if ($file['format'] === 'fb2') {
+		throw new BookFileException('Not a user-format book');
+	}
 	$filename = $book->author_name . " - " . $book->booktitle . " " . $book->filename . "." . trim($book->filetype);
 
 	header('Content-Description: File Transfer');
@@ -36,15 +30,9 @@ if ($zip->open("/work/fb/Flibusta.Net/" . $zip_name)) {
 	header('Pragma: public');
 	header('Content-Disposition: attachment; filename=' . basename(rawurlencode($filename)));
 
-	$data = $zip->getFromName($usr_filename);
-	if ($data == '') {
-		$data = $zip->getFromName($usr_filename . ".zip");
-	}
-
-	echo $data;
-	$zip->close();
-} else {
-	echo "NO ZIP";
+	echo book_file_contents($file);
+} catch (BookFileException $error) {
+	http_response_code(404);
+	echo 'Book file is unavailable';
 }
-
 

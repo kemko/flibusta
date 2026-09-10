@@ -38,12 +38,18 @@ $small = isset($_GET['small']);
 
 if (isset($_GET['id'])) {
 	$id = $_GET['id'];
+} elseif (isset($_GET['sid'])) {
+	$id = $_GET['sid'];
+	$small = true;
 } else {
-	if (isset($_GET['sid'])) {
-		$id = $_GET['sid'];
-		$small = true;
-	}
+	http_response_code(404);
+	die();
 }
+if (filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+	http_response_code(404);
+	die();
+}
+$id = (int)$id;
 $iid = $id;
 
 header("Content-type: image/jpeg");
@@ -60,8 +66,8 @@ if ($small) {
 	}
 }
 
-$stmt = $dbh->prepare("SELECT file FROM libbpics WHERE BookId=$id");
-$stmt->execute();
+$stmt = $dbh->prepare('SELECT file FROM libbpics WHERE BookId=:id');
+$stmt->execute([':id' => $id]);
 $f = $stmt->fetch();
 
 if (isset($f->file)) {
@@ -88,66 +94,11 @@ if (isset($f->file)) {
 }
 
 
-$stmt = $dbh->prepare("SELECT filetype FROM libbook WHERE bookid=$id LIMIT 1");
-$stmt->execute();
-$type = trim($stmt->fetch()->filetype);
-if ($type == 'fb2') {
-	$u = '0';
-} else {
-	$u = '1';
-}
-
-$stmt = $dbh->prepare("SELECT * FROM book_zip WHERE $id BETWEEN start_id AND end_id AND usr=$u");
-$stmt->execute();
-$zip_name = $stmt->fetch()->filename;
-$zip = new ZipArchive(); 
-
-$result = $dbh->query("SELECT filename FROM libfilename where BookId=$id")->fetch();
-
-if ($result) {
-    $filename = $result->filename;
-} else {
-    $filename = null;
-}
-if ($filename == '') {
-	$filename = trim("$id.$type");
-}
-
-if ($zip->open(ROOT_PATH . "flibusta/" . $zip_name)) {
-	$f = $zip->getFromName("$filename");
-}
-
-
-if ($type == 'fb2') {
-	$fb2 = simplexml_load_string($f);
-	$images = array();
-	if (isset($fb2->binary)) {
-		foreach ($fb2->binary as $binary) {
-			$id = $binary->attributes()['id'];		
-			if (
-				(strpos($id, "cover") !==  false) ||
-				(strpos($id, "jpg") !==  false) ||
-				(strpos($id, "obloj") !==  false)
-			) {
-				$cover = base64_decode($binary);
-			}
-			$images["$id"] = $binary;
-		}
-	}
-	$zip->close();
-}
-
-if ($type == 'epub') {
-	file_put_contents(ROOT_PATH . "cache/tmp/$iid.tmp", $f);
-	include('/application/epub.php');
-	$d = new EPub(ROOT_PATH . "cache/tmp/$iid.tmp");
-	$im = $d->Cover();
-	if ($im['found'] != '') {
-		$cover = $im['data'];
-		unlink(ROOT_PATH . "cache/tmp/$iid.tmp");
-	} else {
-		echo file_get_contents('/application/none.jpg');
-	}
+try {
+	$metadata = book_metadata_for_file(book_file_find($dbh, $id));
+	$cover = $metadata['cover_data'] ?? '';
+} catch (BookFileException|BookMetadataException $error) {
+	$cover = '';
 }
 
 if (strlen($cover) < 100) {
@@ -169,4 +120,3 @@ if ($small) {
 } else {
 	echo $cover;
 }
-
