@@ -24,6 +24,8 @@ services:
         working_dir: /application
         volumes:
             - ./application:/application:ro
+            - ./README.md:/project/README.md:ro
+            - ./docker-compose.yml:/project/docker-compose.yml:ro
             - ./phpdocker/nginx/nginx.conf:/tmp/nginx.conf:ro
         environment:
             FLIBUSTA_DBTYPE: postgres

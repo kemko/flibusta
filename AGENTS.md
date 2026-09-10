@@ -22,6 +22,7 @@ Run from the repository root:
 - `docker compose logs php-fpm webserver`: inspect application and server errors.
 - `docker compose exec php-fpm php -l /application/public/index.php`: syntax-check a PHP file; substitute each changed path.
 - `docker compose config --quiet`: validate Compose configuration.
+- `tests/run.sh`: build the isolated test stack, validate both Compose examples, run PHP/Python coverage, syntax checks, and nginx validation.
 
 Place SQL dumps in `FlibustaSQL/` and book ZIPs in `Flibusta.Net/`, then initialize through “Сервис” → “Обновление базы”. Containers need write access to dumps and cache; maintenance scripts need executable permissions.
 
@@ -31,7 +32,7 @@ Match surrounding code: PHP commonly uses tabs, snake_case variables and functio
 
 ## Testing Guidelines
 
-No automated test suite or coverage threshold is configured. Syntax-check changed PHP files and manually exercise affected pages with a populated local database. Check search, book reading, favorites, or OPDS when relevant. Record reproduction steps and expected results for bug fixes; use disposable data for import testing.
+Run `tests/run.sh` for application changes. It requires Docker and enforces at least 80% coverage for new PHP and Python logic. Syntax-check changed PHP files and manually exercise affected pages with a populated local database when a UI change needs it. Check search, book reading, favorites, or OPDS when relevant. Record reproduction steps and expected results for bug fixes; use disposable data for import testing.
 
 ## Commit & Pull Request Guidelines
 

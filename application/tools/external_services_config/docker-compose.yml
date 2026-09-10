@@ -1,48 +1,125 @@
 services:
-
-   flibusta-fpm:
-        build: phpdocker/php-fpm
+    flibusta-fpm:
+        build:
+            context: ../../..
+            dockerfile: phpdocker/php-fpm/Dockerfile
         working_dir: /application
         container_name: flibusta-fpm
         environment:
-           - PUID=${APPUSER_PUID}
-           - PGID=${APPUSER_PGID}
-           - TZ=${TIME_ZONE_VALUE}
-           - FLIBUSTA_WEBROOT=/mylib
-           - FLIBUSTA_DBUSER=flibusta
-           - FLIBUSTA_DBNAME=flibusta
-           - FLIBUSTA_DBTYPE=postgres
-           - FLIBUSTA_DBHOST=postgresdb
-           - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
-           - POSTGRES_ADMIN_USER=postgres
-           - POSTGRES_ADMIN_DBPASSWORD_FILE=/run/secrets/POSTGRES_ADMIN_PWD
-           - DB_HOST_PINGS=3
+            PUID: ${APPUSER_PUID:-}
+            PGID: ${APPUSER_PGID:-}
+            TZ: ${TIME_ZONE_VALUE:-UTC}
+            FLIBUSTA_PUBLIC_URL: ${FLIBUSTA_PUBLIC_URL:-}
+            FLIBUSTA_WEBROOT: ${FLIBUSTA_WEBROOT:-/mylib}
+            FLIBUSTA_DBUSER: ${FLIBUSTA_DBUSER:-flibusta}
+            FLIBUSTA_DBNAME: ${FLIBUSTA_DBNAME:-flibusta}
+            FLIBUSTA_DBTYPE: postgres
+            FLIBUSTA_DBHOST: ${FLIBUSTA_DBHOST:-postgresdb}
+            FLIBUSTA_DBPASSWORD_FILE: /run/secrets/FLIBUSTA_PWD
+            FLIBUSTA_OIDC_ISSUER: ${FLIBUSTA_OIDC_ISSUER:-}
+            FLIBUSTA_OIDC_CLIENT_ID: ${FLIBUSTA_OIDC_CLIENT_ID:-}
+            FLIBUSTA_OIDC_CLIENT_SECRET_FILE: /run/secrets/FLIBUSTA_OIDC_CLIENT_SECRET
+            FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE: /run/secrets/FLIBUSTA_OPDS_OWNER_HMAC_KEY
+            FLIBUSTA_SMTP_HOST: ${FLIBUSTA_SMTP_HOST:-}
+            FLIBUSTA_SMTP_PORT: ${FLIBUSTA_SMTP_PORT:-587}
+            FLIBUSTA_SMTP_TLS: ${FLIBUSTA_SMTP_TLS:-starttls}
+            FLIBUSTA_SMTP_USER: ${FLIBUSTA_SMTP_USER:-}
+            FLIBUSTA_SMTP_PASSWORD_FILE: /run/secrets/FLIBUSTA_SMTP_PASSWORD
+            FLIBUSTA_SMTP_FROM: ${FLIBUSTA_SMTP_FROM:-}
+            FLIBUSTA_SMTP_TO: ${FLIBUSTA_SMTP_TO:-}
+            POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER:-postgres}
+            POSTGRES_ADMIN_DBPASSWORD_FILE: /run/secrets/POSTGRES_ADMIN_PWD
+            DB_HOST_PINGS: ${DB_HOST_PINGS:-3}
         command: /application/tools/external_services_config/flibusta_entrypoint.sh
         networks:
-           flibusta_net:
-             ipv4_address: 172.101.0.101
-           postgres_db_net:
+            flibusta_net:
+                ipv4_address: 172.101.0.101
+            postgres_db_net:
         volumes:
-            - './application:/application'
-            - './cache:/application/cache'
-            - './Flibusta.Net:/application/flibusta'
-            - './FlibustaSQL:/application/sql'
-            - './phpdocker/php-fpm/php-ini-overrides.ini:/usr/local/etc/php/conf.d/local-custom.ini'
-            - './phpdocker/php-fpm/php-fpm.conf:/usr/local/etc/php-fpm.d/zz-php-fpm.conf'
-            - './FlibustaSQL/lib.a.attached.zip:/application/cache/lib.a.attached.zip:ro'
-            - './FlibustaSQL/lib.b.attached.zip:/application/cache/lib.b.attached.zip:ro'
+            - '../../../application:/application'
+            - '../../../cache:/application/cache'
+            - '../../../Flibusta.Net:/application/flibusta'
+            - '../../../FlibustaSQL:/application/sql'
+            - '../../../phpdocker/php-fpm/php-ini-overrides.ini:/usr/local/etc/php/conf.d/local-custom.ini:ro'
+            - '../../../phpdocker/php-fpm/php-fpm.conf:/usr/local/etc/php-fpm.d/zz-php-fpm.conf:ro'
+            - '../../../FlibustaSQL/lib.a.attached.zip:/application/cache/lib.a.attached.zip:ro'
+            - '../../../FlibustaSQL/lib.b.attached.zip:/application/cache/lib.b.attached.zip:ro'
         secrets:
             - FLIBUSTA_PWD
             - POSTGRES_ADMIN_PWD
+            - FLIBUSTA_OIDC_CLIENT_SECRET
+            - FLIBUSTA_OPDS_OWNER_HMAC_KEY
+            - FLIBUSTA_SMTP_PASSWORD
+
+    book-worker:
+        build:
+            context: ../../..
+            dockerfile: phpdocker/php-fpm/Dockerfile
+        working_dir: /application
+        environment:
+            FLIBUSTA_DBUSER: ${FLIBUSTA_DBUSER:-flibusta}
+            FLIBUSTA_DBNAME: ${FLIBUSTA_DBNAME:-flibusta}
+            FLIBUSTA_DBTYPE: postgres
+            FLIBUSTA_DBHOST: ${FLIBUSTA_DBHOST:-postgresdb}
+            FLIBUSTA_DBPASSWORD_FILE: /run/secrets/FLIBUSTA_PWD
+            FLIBUSTA_CACHE_DIR: /application/cache
+            FLIBUSTA_BOOKS_DIR: /application/flibusta
+        command: >
+            sh -ec 'while true; do
+            php /application/tools/app_migrate.php;
+            php /application/tools/app_scan_books.php;
+            php /application/tools/app_worker.php;
+            php /application/tools/app_worker.php --retry-errors;
+            sleep 60;
+            done'
+        networks:
+            postgres_db_net:
+        volumes:
+            - '../../../application:/application'
+            - '../../../cache:/application/cache'
+            - '../../../Flibusta.Net:/application/flibusta'
+        secrets:
+            - FLIBUSTA_PWD
+        restart: unless-stopped
+
+    compilation-converter:
+        build:
+            context: ../../..
+            dockerfile: phpdocker/worker/Dockerfile
+        working_dir: /work
+        volumes:
+            - '../../../application:/application:ro'
+            - '../../../cache:/work'
+        network_mode: none
+        read_only: true
+        mem_limit: 768m
+        pids_limit: 128
+        tmpfs:
+            - /tmp:rw,noexec,nosuid,size=768m
+        entrypoint: ["/bin/sh", "-ec"]
+        command: >
+            while true; do
+            for job in /work/compilations/work/*; do
+            test -f "$$job/manifest.json" && php /application/tools/app_compilation_process.php "$$job" || true;
+            done;
+            sleep 2;
+            done
+        restart: unless-stopped
 
 secrets:
-   FLIBUSTA_PWD:
-      file: ./secrets/flibusta_pwd.txt
-   POSTGRES_ADMIN_PWD:
-      file: ./secrets/postgres_admin_pwd.txt
+    FLIBUSTA_PWD:
+        file: ../../../secrets/flibusta_pwd.txt
+    POSTGRES_ADMIN_PWD:
+        file: ../../../secrets/postgres_admin_pwd.txt
+    FLIBUSTA_OIDC_CLIENT_SECRET:
+        file: ../../../secrets/oidc_client_secret.txt
+    FLIBUSTA_OPDS_OWNER_HMAC_KEY:
+        file: ../../../secrets/opds_owner_hmac_key.txt
+    FLIBUSTA_SMTP_PASSWORD:
+        file: ../../../secrets/smtp_password.txt
 
 networks:
-   postgres_db_net:
-     external: true
-   flibusta_net:
-     external: true
+    postgres_db_net:
+        external: true
+    flibusta_net:
+        external: true

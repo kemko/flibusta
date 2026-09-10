@@ -40,8 +40,16 @@ services:
             - FLIBUSTA_DBTYPE=postgres
             - FLIBUSTA_DBHOST=postgres
             - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
+            - FLIBUSTA_PUBLIC_URL=${FLIBUSTA_PUBLIC_URL:-}
+            - FLIBUSTA_WEBROOT=${FLIBUSTA_WEBROOT:-}
+            - FLIBUSTA_OIDC_ISSUER=${FLIBUSTA_OIDC_ISSUER:-}
+            - FLIBUSTA_OIDC_CLIENT_ID=${FLIBUSTA_OIDC_CLIENT_ID:-}
+            - FLIBUSTA_OIDC_CLIENT_SECRET_FILE=/run/secrets/FLIBUSTA_OIDC_CLIENT_SECRET
+            - FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE=/run/secrets/FLIBUSTA_OPDS_OWNER_HMAC_KEY
         secrets:
             - FLIBUSTA_PWD
+            - FLIBUSTA_OIDC_CLIENT_SECRET
+            - FLIBUSTA_OPDS_OWNER_HMAC_KEY
 
     book-worker:
         build: phpdocker/php-fpm
@@ -56,8 +64,16 @@ services:
             - FLIBUSTA_DBTYPE=postgres
             - FLIBUSTA_DBHOST=postgres
             - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
+            - FLIBUSTA_SMTP_HOST=${FLIBUSTA_SMTP_HOST:-}
+            - FLIBUSTA_SMTP_PORT=${FLIBUSTA_SMTP_PORT:-587}
+            - FLIBUSTA_SMTP_TLS=${FLIBUSTA_SMTP_TLS:-starttls}
+            - FLIBUSTA_SMTP_USER=${FLIBUSTA_SMTP_USER:-}
+            - FLIBUSTA_SMTP_PASSWORD_FILE=/run/secrets/FLIBUSTA_SMTP_PASSWORD
+            - FLIBUSTA_SMTP_FROM=${FLIBUSTA_SMTP_FROM:-}
+            - FLIBUSTA_SMTP_TO=${FLIBUSTA_SMTP_TO:-}
         secrets:
             - FLIBUSTA_PWD
+            - FLIBUSTA_SMTP_PASSWORD
         command: >
             sh -ec 'while true; do
             php /application/tools/app_migrate.php;
@@ -98,3 +114,9 @@ volumes:
 secrets:
     FLIBUSTA_PWD:
         file: ./secrets/flibusta_pwd.txt
+    FLIBUSTA_OIDC_CLIENT_SECRET:
+        file: ./secrets/oidc_client_secret.txt
+    FLIBUSTA_OPDS_OWNER_HMAC_KEY:
+        file: ./secrets/opds_owner_hmac_key.txt
+    FLIBUSTA_SMTP_PASSWORD:
+        file: ./secrets/smtp_password.txt
