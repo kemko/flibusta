@@ -15,6 +15,9 @@ gzip -f -d /application/sql/*.gz
 /application/tools/app_topg lib.a.annotations.sql
 /application/tools/app_topg lib.b.annotations.sql
 /application/tools/app_topg lib.libavtorname.sql
+if [ -f /application/sql/lib.libavtoraliase.sql ]; then
+    /application/tools/app_topg lib.libavtoraliase.sql
+fi
 /application/tools/app_topg lib.libavtor.sql
 /application/tools/app_topg lib.libbook.sql
 /application/tools/app_topg lib.libfilename.sql

@@ -15,7 +15,7 @@ docker compose -f application/tools/external_services_config/docker-compose.yml 
 В `.env` рядом с корнем репозитория задайте, например:
 
 ```
-FLIBUSTA_PUBLIC_URL=https://library.example/mylib
+FLIBUSTA_PUBLIC_URL=https://library.example
 FLIBUSTA_WEBROOT=/mylib
 FLIBUSTA_DBHOST=postgresdb
 FLIBUSTA_OIDC_ISSUER=https://id.example
@@ -42,3 +42,5 @@ Callback у провайдера OIDC должен быть ровно `https://
 ```
 docker compose -f application/tools/external_services_config/docker-compose.yml config --quiet
 ```
+
+`FLIBUSTA_PUBLIC_URL` задаёт только origin без пути; `/mylib` задаётся через `FLIBUSTA_WEBROOT`. Лимиты ZIP и записей, команды повторной обработки ошибок и состав автоматических проверок описаны в основном README.

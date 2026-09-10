@@ -86,12 +86,16 @@ function cart_snapshot_book(PDO $dbh, int $bookid, array $config): array {
 	} catch (BookFileException $error) {
 		throw new CartException("Book {$bookid} source is unavailable", 0, $error);
 	}
+	$primary_translators = cart_book_people($dbh, $bookid, 'translator');
+	$extracted_translators = $primary_translators === [] ? book_metadata_extract(trim((string)$book['filetype']), $data, $config['limits'])['translators'] : [];
 	return [
 		'bookid' => $bookid,
 		'title' => (string)$book['title'],
-		'format' => strtolower((string)$book['filetype']),
+		'format' => strtolower(trim((string)$book['filetype'])),
 		'authors' => cart_book_people($dbh, $bookid, 'author'),
-		'primary_translators' => cart_book_people($dbh, $bookid, 'translator'),
+		'primary_translators' => $primary_translators,
+		'extracted_translators' => $extracted_translators,
+		'url' => rtrim($config['public_url'], '/') . '/' . trim($config['webroot'], '/') . (trim($config['webroot'], '/') === '' ? '' : '/') . 'book/view/' . $bookid,
 		'archive_name' => (string)$file['archive_name'],
 		'entry_name' => (string)$file['entry_name'],
 		'size_bytes' => strlen($data),

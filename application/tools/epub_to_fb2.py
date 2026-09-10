@@ -19,6 +19,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+from urllib.parse import unquote
 
 
 class ConversionError(RuntimeError):
@@ -60,7 +61,7 @@ def safe_member(name):
 
 
 def resolve_path(base, href):
-    path = href.split('#', 1)[0]
+    path = unquote(href.split('#', 1)[0])
     if not path:
         return None
     if re.match(r'^[a-z][a-z0-9+.-]*:', path, re.I) or path.startswith('/'):
@@ -129,7 +130,7 @@ def inspect_epub(path):
         names = archive.namelist()
         if len(names) != len(set(names)):
             raise ConversionError('EPUB has duplicate entries')
-        if not names or any(not safe_member(name) for name in names):
+        if not names or any(not safe_member(name[:-1] if name.endswith('/') else name) for name in names):
             raise ConversionError('EPUB has an unsafe entry path')
         encrypted = [info.filename for info in archive.infolist() if info.flag_bits & 1]
         if encrypted:
@@ -203,28 +204,69 @@ def source_references(path, inspection):
     with zipfile.ZipFile(path) as archive:
         for member in inspection['spine']:
             document = xml_document(archive.read(member), member)
+            anchors[(member, '')] = 'epub-%d' % len(anchors)
             for node in document.iter():
                 identifier = attribute(node, 'id')
                 if identifier:
-                    if identifier in anchors:
-                        raise ConversionError('Duplicate EPUB anchor: %s' % identifier)
-                    anchors[identifier] = text(node)
+                    key = (member, identifier)
+                    if key in anchors:
+                        raise ConversionError('Duplicate EPUB anchor in %s: %s' % key)
+                    anchors[key] = 'epub-%d' % len(anchors)
         for member in inspection['spine']:
             document = xml_document(archive.read(member), member)
             for node in document.iter():
-                if local_name(node.tag) != 'a' or not attribute(node, 'href'):
-                    continue
                 href = attribute(node, 'href')
-                if '#' not in href:
-                    continue
-                target_member, target = href.split('#', 1)
-                if not target:
-                    continue
-                resolved = resolve_path(posixpath.dirname(member), target_member) if target_member else member
-                if resolved not in inspection['spine'] or target not in anchors:
-                    raise ConversionError('Broken EPUB anchor link in %s: %s' % (member, href))
-                links.append((text(node), target))
+                if local_name(node.tag) == 'a' and href:
+                    key = reference_key(member, href)
+                    if key is None:
+                        continue
+                    if key not in anchors:
+                        raise ConversionError('Broken EPUB anchor link in %s: %s' % (member, href))
+                    links.append(key)
     return anchors, links
+
+
+def reference_key(member, href):
+    path, _, fragment = href.partition('#')
+    resolved = resolve_path(posixpath.dirname(member), path) if path else member
+    return (resolved, unquote(fragment)) if resolved else None
+
+
+def prepare_epub(source, destination, inspection):
+    """Carry exact reference identities through Calibre without matching prose."""
+    anchors, _ = source_references(source, inspection)
+    prefix = 'FLIBUSTA' + os.urandom(12).hex().upper()
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination, 'w') as output:
+        for info in original.infolist():
+            data = original.read(info)
+            if info.filename in inspection['spine']:
+                root = xml_document(data, info.filename)
+                parents = {child: parent for parent in root.iter() for child in parent}
+                for node in list(root.iter()):
+                    ids = []
+                    if local_name(node.tag) == 'body':
+                        ids.append(anchors[(info.filename, '')])
+                    if attribute(node, 'id'):
+                        ids.append(anchors[(info.filename, attribute(node, 'id'))])
+                    # A span survives XHTML conversion, including empty anchors and images.
+                    for identifier in reversed(ids):
+                        marker = ET.Element('{http://www.w3.org/1999/xhtml}span')
+                        marker.text = prefix + identifier + 'END'
+                        if local_name(node.tag) in {'img', 'br', 'hr'}:
+                            parent = parents[node]
+                            parent.insert(list(parent).index(node), marker)
+                        else:
+                            marker.tail = node.text
+                            node.text = None
+                            node.insert(0, marker)
+                    href = attribute(node, 'href')
+                    if local_name(node.tag) == 'a' and href:
+                        key = reference_key(info.filename, href)
+                        if key is not None:
+                            node.set('href', 'https://flibusta.invalid/' + prefix + '/' + anchors[key])
+                data = ET.tostring(root, encoding='utf-8', xml_declaration=True)
+            output.writestr(info, data)
+    return anchors, prefix
 
 
 def limit_resources(memory_mib):
@@ -235,7 +277,7 @@ def limit_resources(memory_mib):
 def calibre_command(source, destination):
     return [
         'ebook-convert', str(source), str(destination), '--disable-font-rescaling',
-        '--chapter=//h:never', '--level1-toc=//h:never', '--level2-toc=//h:never', '--level3-toc=//h:never',
+        '--sectionize=nothing', '--chapter=//h:never', '--level1-toc=//h:never', '--level2-toc=//h:never', '--level3-toc=//h:never',
     ]
 
 
@@ -258,59 +300,106 @@ def fb2_ids(root):
     return ids
 
 
-def add_source_id(root, identifier, needle):
-    for node in root.iter():
-        if local_name(node.tag) not in {'FictionBook', 'description'} and needle and needle == text(node) and not attribute(node, 'id'):
-            node.set('id', identifier)
-            return
-    raise ConversionError('Calibre conversion lost EPUB anchor: %s' % identifier)
-
-
-def add_source_link(root, label, target):
-    for node in root.iter():
-        if local_name(node.tag) != 'p' or list(node) or not node.text or label not in node.text:
-            continue
-        before, after = node.text.split(label, 1)
-        node.text = before
-        link = ET.SubElement(node, '{%s}a' % FB2_NS, {'{%s}href' % XLINK_NS: '#' + target})
-        link.text = label
-        link.tail = after
-        return
-    raise ConversionError('Calibre conversion lost EPUB internal link: %s' % label)
-
-
-def add_navigation(root, toc):
+def add_navigation(root, toc, anchors=None, targets=None):
     if not toc:
         return
-    navigation = ET.Element('{%s}body' % FB2_NS, {'name': 'toc'})
+    anchors, targets = anchors or {}, targets or {}
+    body = next(node for node in root if local_name(node.tag) == 'body' and not attribute(node, 'name'))
+    blocks = []
+    def collect(node):
+        for child in node:
+            if local_name(child.tag) == 'section':
+                collect(child)
+            else:
+                blocks.append(child)
+    collect(body)
+    positions = {attribute(node, 'id'): index for index, block in enumerate(blocks) for node in block.iter() if attribute(node, 'id')}
+    events = []
+    section_targets = {}
+    def visit(items, parent_path):
+        for item in items:
+            key = (item['target'], unquote(item['href'].partition('#')[2]))
+            identifier = targets.get(anchors.get(key))
+            if identifier not in positions:
+                raise ConversionError('Lost table of contents target: %s' % item['href'])
+            section = ET.Element('{%s}section' % FB2_NS)
+            title = ET.SubElement(section, '{%s}title' % FB2_NS)
+            ET.SubElement(title, '{%s}p' % FB2_NS).text = item['title'] or 'Untitled'
+            section_targets[section] = identifier
+            path = parent_path + [section]
+            events.append((positions[identifier], path, identifier))
+            visit(item['children'], path)
+    visit(toc, [])
+    if any(events[i][0] > events[i + 1][0] for i in range(len(events) - 1)):
+        raise ConversionError('EPUB navigation is not in reading order')
+    body.clear()
+    active = body
+    cursor = 0
+    for position, path, identifier in events:
+        for block in blocks[cursor:position]:
+            active.append(block)
+        parent = body
+        for section in path:
+            if section not in list(parent):
+                parent.append(section)
+            parent = section
+        active = parent
+        cursor = position
+    for block in blocks[cursor:]:
+        active.append(block)
+    # FB2 permits either child sections or prose, so wrap introductory prose
+    # in an unnamed section without adding a table-of-contents entry.
+    for parent in list(body.iter())[::-1]:
+        if local_name(parent.tag) not in {'body', 'section'}:
+            continue
+        children = list(parent)
+        if not any(local_name(child.tag) == 'section' for child in children):
+            if local_name(parent.tag) == 'section' and all(local_name(child.tag) == 'title' for child in children):
+                paragraph = ET.SubElement(parent, '{%s}p' % FB2_NS)
+                link = ET.SubElement(paragraph, '{%s}a' % FB2_NS, {'{%s}href' % XLINK_NS: '#' + section_targets[parent]})
+                link.text = text(children[0])
+            continue
+        group = None
+        for child in children:
+            if local_name(child.tag) in {'title', 'section'}:
+                group = None
+            else:
+                if group is None:
+                    group = ET.Element('{%s}section' % FB2_NS)
+                    parent.insert(list(parent).index(child), group)
+                parent.remove(child)
+                group.append(child)
 
-    def append(parent, item, number):
-        section = ET.SubElement(parent, '{%s}section' % FB2_NS, {'id': 'toc-%s' % number})
-        title = ET.SubElement(section, '{%s}title' % FB2_NS)
-        paragraph = ET.SubElement(title, '{%s}p' % FB2_NS)
-        paragraph.text = item['title'] or 'Untitled'
-        target = item['href'].split('#', 1)[1] if '#' in item['href'] else None
-        if target:
-            reference = ET.SubElement(section, '{%s}p' % FB2_NS)
-            link = ET.SubElement(reference, '{%s}a' % FB2_NS, {'{%s}href' % XLINK_NS: '#' + target})
-            link.text = item['title'] or 'Untitled'
-        for child_index, child in enumerate(item['children']):
-            append(section, child, '%s-%s' % (number, child_index))
 
-    for index, item in enumerate(toc):
-        append(navigation, item, str(index))
-    description = next((node for node in root if local_name(node.tag) == 'description'), None)
-    root.insert(list(root).index(description) + 1 if description is not None else 0, navigation)
-
-
-def adapt_fb2(path, source, inspection):
+def adapt_fb2(path, inspection, anchors, prefix):
     root = ET.parse(path).getroot()
-    anchors, links = source_references(source, inspection)
-    for identifier, needle in anchors.items():
-        add_source_id(root, identifier, needle)
-    for label, target in links:
-        add_source_link(root, label, target)
-    add_navigation(root, inspection['toc'])
+    parents = {child: parent for parent in root.iter() for child in parent}
+    targets = {}
+    pattern = re.compile(re.escape(prefix) + r'(epub-[0-9]+)END')
+    for node in root.iter():
+        for field in ('text', 'tail'):
+            value = getattr(node, field)
+            if not value:
+                continue
+            identifiers = pattern.findall(value)
+            if identifiers:
+                block = node if field == 'text' else parents[node]
+                while local_name(block.tag) not in {'p', 'subtitle', 'section'}:
+                    block = parents[block]
+                identifier = attribute(block, 'id') or identifiers[0]
+                block.set('id', identifier)
+                targets.update((key, identifier) for key in identifiers)
+                setattr(node, field, pattern.sub('', value))
+    for node in root.iter():
+        href = attribute(node, 'href')
+        if href and href.startswith('https://flibusta.invalid/' + prefix + '/'):
+            identifier = href.rsplit('/', 1)[1]
+            if identifier not in targets:
+                raise ConversionError('Calibre lost a reference target')
+            node.set('{%s}href' % XLINK_NS, '#' + targets[identifier])
+    if set(anchors.values()) - set(targets):
+        raise ConversionError('Calibre lost source anchors')
+    add_navigation(root, inspection['toc'], anchors, targets)
     ET.ElementTree(root).write(path, encoding='utf-8', xml_declaration=True)
 
 
@@ -361,13 +450,15 @@ def convert(source, output, timeout, memory_mib, work_dir, xsd):
     temporary = Path(tempfile.mkdtemp(prefix='flibusta-epub-', dir=work_root))
     try:
         raw = temporary / 'converted.fb2'
-        completed = subprocess.run(calibre_command(source, raw), cwd=temporary, timeout=timeout, text=True, capture_output=True, preexec_fn=lambda: limit_resources(memory_mib))
+        prepared = temporary / 'source.epub'
+        anchors, prefix = prepare_epub(source, prepared, inspection)
+        completed = subprocess.run(calibre_command(prepared, raw), cwd=temporary, timeout=timeout, text=True, capture_output=True, preexec_fn=lambda: limit_resources(memory_mib))
         if completed.returncode:
             raise ConversionError('Calibre conversion failed: %s' % (completed.stderr.strip() or completed.stdout.strip()))
         if not raw.is_file() or raw.stat().st_size == 0:
             raise ConversionError('Calibre produced no FB2')
         verify_content(source, inspection, raw)
-        adapt_fb2(raw, source, inspection)
+        adapt_fb2(raw, inspection, anchors, prefix)
         validate_fb2(raw, xsd)
         output.parent.mkdir(parents=True, exist_ok=True)
         descriptor, pending = tempfile.mkstemp(prefix='.flibusta-fb2-', dir=output.parent)

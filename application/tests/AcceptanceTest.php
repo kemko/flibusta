@@ -116,6 +116,7 @@ final class AcceptanceTest extends TestCase {
 		$snapshot = json_decode((string)$snapshot_statement->fetchColumn(), true, 512, JSON_THROW_ON_ERROR);
 		self::assertSame([101, 102], array_column($snapshot, 'bookid'));
 		self::assertSame(['fb2', 'epub'], array_column($snapshot, 'format'));
+		self::assertSame(['EPUB Translator'], $snapshot[1]['extracted_translators']);
 
 		$claimed = cart_claim_job($this->dbh, 1);
 		self::assertSame($job['job_id'], $claimed['job_id']);

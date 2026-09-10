@@ -60,6 +60,7 @@ final class AuthorSearchTest extends TestCase {
 		self::assertSame([':author_0' => 2, ':author_1' => 7], $placeholders['parameters']);
 		$this->dbh->exec("INSERT INTO author_search_index (author_id, canonical_author_id, normalized_name, source)
 			SELECT 100000 + value, 100000 + value, md5(value::text), 'synthetic' FROM generate_series(1, 50000) AS value");
+		$this->dbh->exec('ANALYZE author_search_index');
 		$this->dbh->exec('SET enable_seqscan = off');
 		$plan = $this->dbh->query("EXPLAIN SELECT author_id FROM author_search_index WHERE normalized_name % 'cfa0860e83a4c3a763a7e62d825349f7'")->fetchAll(PDO::FETCH_COLUMN);
 		self::assertStringContainsString('author_search_index_name_trgm_idx', implode("\n", $plan));
@@ -72,5 +73,6 @@ final class AuthorSearchTest extends TestCase {
 		self::assertStringContainsString('libavtorname.masterid = 0', $cleanup);
 		self::assertStringContainsString('child.masterid', $cleanup);
 		self::assertStringContainsString('php /application/author_search.php', file_get_contents(dirname(__DIR__) . '/tools/app_import_sql.sh'));
+		self::assertStringContainsString('/application/tools/app_topg lib.libavtoraliase.sql', file_get_contents(dirname(__DIR__) . '/tools/app_import_sql.sh'));
 	}
 }

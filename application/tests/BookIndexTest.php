@@ -55,6 +55,24 @@ final class BookIndexTest extends TestCase {
 		self::assertSame($first_extracted_at, $extracted->fetchColumn());
 	}
 
+	public function testFailedArchiveInsertionRollsBackAndCanBeRetried(): void {
+		$this->archive('interrupted.zip', ['1.fb2' => '<FictionBook/>', '2.fb2' => '<FictionBook/>']);
+		$this->dbh->exec("ALTER TABLE book_archive_entries ADD CONSTRAINT review_failure CHECK (entry_name <> '2.fb2')");
+		try {
+			try {
+				book_index_scan_archives($this->dbh, $this->directory);
+				self::fail('The injected entry failure must abort the archive');
+			} catch (PDOException $error) {
+				self::assertSame(0, (int)$this->dbh->query('SELECT count(*) FROM book_archives')->fetchColumn());
+				self::assertSame(0, (int)$this->dbh->query('SELECT count(*) FROM book_archive_entries')->fetchColumn());
+			}
+		} finally {
+			$this->dbh->exec('ALTER TABLE book_archive_entries DROP CONSTRAINT review_failure');
+		}
+		book_index_scan_archives($this->dbh, $this->directory);
+		self::assertSame(2, (int)$this->dbh->query('SELECT count(*) FROM book_archive_entries')->fetchColumn());
+	}
+
 	public function testRecordsAndSeparatelyRetriesMetadataErrors(): void {
 		$this->archive('bad-book.zip', ['9.fb2' => '<broken']);
 		book_index_scan_archives($this->dbh, $this->directory);

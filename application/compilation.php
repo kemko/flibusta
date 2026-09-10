@@ -105,6 +105,23 @@ function compilation_main_body(DOMDocument $source): DOMElement {
 	throw new CompilationException('FB2 has no main body');
 }
 
+function compilation_copy_body(DOMDocument $document, DOMElement $body, DOMElement $target): void {
+	// A body orders its opening image before its title; a section reverses them.
+	$children = array_values(array_filter(iterator_to_array($body->childNodes), static fn ($node): bool => $node instanceof DOMElement));
+	foreach (['title', 'epigraph', 'image'] as $name) {
+		foreach ($children as $node) {
+			if ($node->localName === $name) {
+				$target->appendChild($document->importNode($node, true));
+			}
+		}
+	}
+	foreach ($children as $node) {
+		if (!in_array($node->localName, ['title', 'epigraph', 'image'], true)) {
+			$target->appendChild($document->importNode($node, true));
+		}
+	}
+}
+
 function compilation_validate(DOMDocument $document, ?string $xsd = null): void {
 	$ids = [];
 	$links = [];
@@ -126,8 +143,14 @@ function compilation_validate(DOMDocument $document, ?string $xsd = null): void 
 			throw new CompilationException('Broken compilation reference: ' . $link);
 		}
 	}
-	if ($xsd !== null && !$document->schemaValidate($xsd)) {
-		throw new CompilationException('Compilation fails XSD validation');
+	$xsd = $xsd ?? __DIR__ . '/schema/FictionBook.xsd';
+	$previous = libxml_use_internal_errors(true);
+	$valid = $document->schemaValidate($xsd);
+	$validation_error = libxml_get_last_error();
+	libxml_clear_errors();
+	libxml_use_internal_errors($previous);
+	if (!$valid) {
+		throw new CompilationException('Compilation fails XSD validation: ' . ($validation_error ? trim($validation_error->message) : 'invalid document'));
 	}
 }
 
@@ -150,12 +173,18 @@ function compilation_build(string $title, array $books, string $webroot = '', ?s
 	$document->appendChild($root);
 	$description = compilation_element($document, 'description');
 	$title_info = compilation_element($document, 'title-info');
-	$title_info->appendChild(compilation_element($document, 'book-title', $title));
+	$title_info->appendChild(compilation_element($document, 'genre', 'unrecognised'));
+	$book_title = compilation_element($document, 'book-title', $title);
+	$title_info->appendChild($book_title);
 	$annotation = compilation_element($document, 'annotation');
 	$title_info->appendChild($annotation);
 	$description->appendChild($title_info);
 	$document_info = compilation_element($document, 'document-info');
+	compilation_people($document, $document_info, 'author', ['Flibusta']);
 	$document_info->appendChild(compilation_element($document, 'program-used', 'Flibusta compilation'));
+	$document_info->appendChild(compilation_element($document, 'date', gmdate('Y-m-d')));
+	$document_info->appendChild(compilation_element($document, 'id', hash('sha256', serialize([$title, $books]))));
+	$document_info->appendChild(compilation_element($document, 'version', '1.0'));
 	$description->appendChild($document_info);
 	$root->appendChild($description);
 
@@ -184,8 +213,19 @@ function compilation_build(string $title, array $books, string $webroot = '', ?s
 		$section_title = compilation_element($document, 'title');
 		$section_title->appendChild(compilation_element($document, 'p', $source_title));
 		$section->appendChild($section_title);
-		foreach (compilation_main_body($source)->childNodes as $node) {
-			$section->appendChild($document->importNode($node, true));
+		$main = compilation_main_body($source);
+		$has_body_title = false;
+		foreach ($main->childNodes as $node) {
+			$has_body_title = $has_body_title || ($node instanceof DOMElement && $node->localName === 'title');
+		}
+		if ($has_body_title) {
+			$content = compilation_element($document, 'section');
+			compilation_copy_body($document, $main, $content);
+			$section->appendChild($content);
+		} else {
+			foreach ($main->childNodes as $node) {
+				$section->appendChild($document->importNode($node, true));
+			}
 		}
 		$body->appendChild($section);
 		foreach ($source->documentElement->childNodes as $node) {
@@ -211,7 +251,11 @@ function compilation_build(string $title, array $books, string $webroot = '', ?s
 			'url' => (string)($book['url'] ?? rtrim($webroot, '/') . '/book/view/' . $bookid),
 		];
 	}
-	compilation_people($document, $title_info, 'author', $authors);
+	compilation_people($document, $title_info, 'author', $authors ?: ['Неизвестный автор']);
+	foreach (iterator_to_array($title_info->getElementsByTagName('author')) as $author) {
+		$title_info->insertBefore($author, $book_title);
+	}
+	$title_info->appendChild(compilation_element($document, 'lang', 'und'));
 	compilation_people($document, $title_info, 'translator', $translators);
 	$annotation->appendChild(compilation_element($document, 'p', 'Сборник произведений: ' . implode('; ', array_column($sources, 'title'))));
 	$sources_section = compilation_element($document, 'section');
@@ -227,8 +271,15 @@ function compilation_build(string $title, array $books, string $webroot = '', ?s
 		$sources_section->appendChild($paragraph);
 	}
 	$body->appendChild($sources_section);
-	foreach ($secondary_bodies as $secondary_body) {
-		$root->appendChild($secondary_body);
+	if ($secondary_bodies !== []) {
+		$notes = compilation_element($document, 'body');
+		$notes->setAttribute('name', 'notes');
+		foreach ($secondary_bodies as $secondary_body) {
+			$note_group = compilation_element($document, 'section');
+			compilation_copy_body($document, $secondary_body, $note_group);
+			$notes->appendChild($note_group);
+		}
+		$root->appendChild($notes);
 	}
 	foreach ($binaries as $binary) {
 		$root->appendChild($binary);

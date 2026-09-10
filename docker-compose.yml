@@ -1,4 +1,3 @@
-version: '3.1'
 services:
     postgres:
         build: phpdocker/pg
@@ -25,7 +24,9 @@ services:
             - '27100:80'
 
     php-fpm:
-        build: phpdocker/php-fpm
+        build:
+            context: .
+            dockerfile: phpdocker/php-fpm/Dockerfile
         working_dir: /application
         volumes:
             - './application:/application'
@@ -38,6 +39,8 @@ services:
             - FLIBUSTA_DBUSER=flibusta
             - FLIBUSTA_DBNAME=flibusta
             - FLIBUSTA_DBTYPE=postgres
+            - FLIBUSTA_MAX_ARCHIVE_BYTES=${FLIBUSTA_MAX_ARCHIVE_BYTES:-1073741824}
+            - FLIBUSTA_MAX_ENTRY_BYTES=${FLIBUSTA_MAX_ENTRY_BYTES:-104857600}
             - FLIBUSTA_DBHOST=postgres
             - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
             - FLIBUSTA_PUBLIC_URL=${FLIBUSTA_PUBLIC_URL:-}
@@ -46,13 +49,23 @@ services:
             - FLIBUSTA_OIDC_CLIENT_ID=${FLIBUSTA_OIDC_CLIENT_ID:-}
             - FLIBUSTA_OIDC_CLIENT_SECRET_FILE=/run/secrets/FLIBUSTA_OIDC_CLIENT_SECRET
             - FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE=/run/secrets/FLIBUSTA_OPDS_OWNER_HMAC_KEY
+            - FLIBUSTA_SMTP_HOST=${FLIBUSTA_SMTP_HOST:-}
+            - FLIBUSTA_SMTP_PORT=${FLIBUSTA_SMTP_PORT:-587}
+            - FLIBUSTA_SMTP_TLS=${FLIBUSTA_SMTP_TLS:-starttls}
+            - FLIBUSTA_SMTP_USER=${FLIBUSTA_SMTP_USER:-}
+            - FLIBUSTA_SMTP_PASSWORD_FILE=/run/secrets/FLIBUSTA_SMTP_PASSWORD
+            - FLIBUSTA_SMTP_FROM=${FLIBUSTA_SMTP_FROM:-}
+            - FLIBUSTA_SMTP_TO=${FLIBUSTA_SMTP_TO:-}
         secrets:
+            - FLIBUSTA_SMTP_PASSWORD
             - FLIBUSTA_PWD
             - FLIBUSTA_OIDC_CLIENT_SECRET
             - FLIBUSTA_OPDS_OWNER_HMAC_KEY
 
     book-worker:
-        build: phpdocker/php-fpm
+        build:
+            context: .
+            dockerfile: phpdocker/php-fpm/Dockerfile
         working_dir: /application
         volumes:
             - './application:/application'
@@ -62,6 +75,8 @@ services:
             - FLIBUSTA_DBUSER=flibusta
             - FLIBUSTA_DBNAME=flibusta
             - FLIBUSTA_DBTYPE=postgres
+            - FLIBUSTA_MAX_ARCHIVE_BYTES=${FLIBUSTA_MAX_ARCHIVE_BYTES:-1073741824}
+            - FLIBUSTA_MAX_ENTRY_BYTES=${FLIBUSTA_MAX_ENTRY_BYTES:-104857600}
             - FLIBUSTA_DBHOST=postgres
             - FLIBUSTA_DBPASSWORD_FILE=/run/secrets/FLIBUSTA_PWD
             - FLIBUSTA_SMTP_HOST=${FLIBUSTA_SMTP_HOST:-}

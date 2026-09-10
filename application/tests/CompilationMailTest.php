@@ -71,13 +71,22 @@ final class CompilationMailTest extends TestCase {
 
 	public function testLocalSmtpReceiverGetsTheConfiguredAddressAndAttachment(): void {
 		$path = $this->readyJob();
+		$before = json_decode((string)file_get_contents('http://smtp-test:8025/api/v1/messages'), true, 512, JSON_THROW_ON_ERROR);
+		$before_ids = array_column($before['messages'], 'ID');
+		$bytes = '<FictionBook>' . bin2hex(random_bytes(12)) . '</FictionBook>';
+		file_put_contents($path, $bytes);
 		compilation_mail_send(['job_id' => '33333333-3333-4333-8333-333333333333', 'title' => 'Письмо', 'result_path' => $path], $this->config);
 		$messages = json_decode((string)file_get_contents('http://smtp-test:8025/api/v1/messages'), true, 512, JSON_THROW_ON_ERROR);
 		$list = $messages['messages'] ?? $messages;
-		$summary = end($list);
+		$new = array_values(array_filter($list, static fn (array $message): bool => !in_array($message['ID'], $before_ids, true)));
+		self::assertCount(1, $new);
+		$summary = $new[0];
 		$id = $summary['ID'] ?? $summary['id'] ?? null;
 		self::assertIsString($id);
 		$detail = json_decode((string)file_get_contents('http://smtp-test:8025/api/v1/message/' . rawurlencode($id)), true, 512, JSON_THROW_ON_ERROR);
+		$attachment = $detail['Attachments'][0];
+		$received = file_get_contents('http://smtp-test:8025/api/v1/message/' . rawurlencode($id) . '/part/' . rawurlencode($attachment['PartID']));
+		self::assertSame($bytes, $received);
 		$serialized = json_encode($detail, JSON_THROW_ON_ERROR);
 		self::assertStringContainsString('reader@example.test', $serialized);
 		self::assertStringContainsString('compilation-33333333-3333-4333-8333-333333333333.fb2', $serialized);

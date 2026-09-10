@@ -2,6 +2,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import subprocess
 import tempfile
 import types
 import unittest
@@ -43,27 +44,21 @@ class EpubToFb2Test(unittest.TestCase):
         self.assertNotIn(' ', command[0])
         self.assertIn('/tmp/source.epub', command)
 
-    def test_adapter_restores_anchors_links_and_original_navigation(self):
+    def test_adapter_preserves_reference_positions_and_navigation(self):
         with tempfile.TemporaryDirectory() as directory:
-            source = pathlib.Path(directory) / 'source.epub'
+            source = self.make_epub(directory)
+            prepared = pathlib.Path(directory) / 'prepared.epub'
             result = pathlib.Path(directory) / 'result.fb2'
-            with zipfile.ZipFile(source, 'w') as archive:
-                archive.writestr('OEBPS/chapter.xhtml', '<html><body><section id="one"><p id="note">A note points <a href="#one">back</a>.</p></section></body></html>')
-            result.write_text('<?xml version="1.0"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><body><section><p>A note points back.</p></section></body></FictionBook>')
-            inspection = {
-                'spine': ['OEBPS/chapter.xhtml'],
-                'toc': [{'title': 'First', 'href': 'chapter.xhtml#one', 'target': 'OEBPS/chapter.xhtml', 'children': [
-                    {'title': 'Again', 'href': 'chapter.xhtml#one', 'target': 'OEBPS/chapter.xhtml', 'children': []},
-                    {'title': 'Note', 'href': 'chapter.xhtml#note', 'target': 'OEBPS/chapter.xhtml', 'children': []},
-                ]}],
-            }
-            MODULE.adapt_fb2(result, source, inspection)
+            inspection = MODULE.inspect_epub(source)
+            anchors, prefix = MODULE.prepare_epub(source, prepared, inspection)
+            body_id, one, note = (anchors[('OEBPS/chapter.xhtml', key)] for key in ('', 'one', 'note'))
+            result.write_text('<FictionBook xmlns="%s" xmlns:l="%s"><body><section><p>%s%sEND%s%sENDOne anchor <a l:href="https://flibusta.invalid/%s/%s">jump</a><a l:href="https://flibusta.invalid/%s/%s">jump</a></p><p>%s%sENDNote anchor</p></section></body></FictionBook>' % (MODULE.FB2_NS, MODULE.XLINK_NS, prefix, body_id, prefix, one, prefix, note, prefix, one, prefix, note))
+            MODULE.adapt_fb2(result, inspection, anchors, prefix)
             root = ET.parse(result).getroot()
-            identifiers = MODULE.fb2_ids(root)
-            hrefs = [MODULE.attribute(node, 'href') for node in root.iter() if MODULE.attribute(node, 'href')]
-            self.assertTrue({'one', 'note', 'toc-0', 'toc-0-0', 'toc-0-1'} <= identifiers)
-            self.assertEqual(3, hrefs.count('#one'))
-            self.assertIn('#note', hrefs)
+            self.assertNotIn(prefix, result.read_text())
+            self.assertEqual(['#' + note, '#' + body_id], [MODULE.attribute(node, 'href') for node in root.iter() if MODULE.local_name(node.tag) == 'a'])
+            self.assertEqual(['One', 'Note'], [MODULE.text(node) for node in root.iter() if MODULE.local_name(node.tag) == 'title'])
+            MODULE.validate_fb2(result)
 
     def test_no_navigation_does_not_add_a_body(self):
         root = ET.fromstring('<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><body/></FictionBook>')
@@ -76,7 +71,7 @@ class EpubToFb2Test(unittest.TestCase):
             inspection = MODULE.inspect_epub(source)
             self.assertEqual(['OEBPS/chapter.xhtml'], inspection['spine'])
             self.assertEqual('One', inspection['toc'][0]['title'])
-            self.assertEqual({'one', 'note'}, set(MODULE.source_references(source, inspection)[0]))
+            self.assertEqual({('OEBPS/chapter.xhtml', key) for key in ('', 'one', 'note')}, set(MODULE.source_references(source, inspection)[0]))
             self.assertIn('anchor', MODULE.source_words(source, inspection))
 
     def test_validates_links_and_rejects_dangling_ones(self):
@@ -88,19 +83,29 @@ class EpubToFb2Test(unittest.TestCase):
             with self.assertRaises(MODULE.ConversionError):
                 MODULE.validate_fb2(result)
 
-    def test_convert_uses_calibre_result_and_publishes_atomically(self):
+    def test_directory_entries_and_document_scoped_anchors(self):
         with tempfile.TemporaryDirectory() as directory:
             source = self.make_epub(directory)
-            output = pathlib.Path(directory) / 'nested' / 'result.fb2'
+            with zipfile.ZipFile(source, 'a') as archive:
+                archive.writestr('OEBPS/', '')
+                archive.writestr('OEBPS/second.xhtml', '<html><body><p id="one">Other chapter</p></body></html>')
+            inspection = MODULE.inspect_epub(source)
+            inspection['spine'].append('OEBPS/second.xhtml')
+            anchors, _ = MODULE.source_references(source, inspection)
+            self.assertNotEqual(anchors[('OEBPS/chapter.xhtml', 'one')], anchors[('OEBPS/second.xhtml', 'one')])
 
-            def calibre(command, **_):
-                pathlib.Path(command[2]).write_text('<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><body><p>One anchor jump</p><p>Note anchor</p></body></FictionBook>')
-                return types.SimpleNamespace(returncode=0, stderr='', stdout='')
-
-            with mock.patch.object(MODULE.subprocess, 'run', side_effect=calibre):
-                MODULE.convert(source, output, 1, 64, directory, None)
-            root = ET.parse(output).getroot()
-            self.assertTrue({'one', 'note'} <= MODULE.fb2_ids(root))
+    def test_failed_and_timed_out_conversion_preserve_previous_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = self.make_epub(directory)
+            output = pathlib.Path(directory) / 'result.fb2'
+            output.write_text('previous result')
+            for result in [types.SimpleNamespace(returncode=1, stderr='failure', stdout=''), types.SimpleNamespace(returncode=0, stderr='', stdout=''), subprocess.TimeoutExpired('ebook-convert', 1)]:
+                with self.subTest(result=result):
+                    arguments = {'side_effect': result} if isinstance(result, Exception) else {'return_value': result}
+                    with mock.patch.object(MODULE.subprocess, 'run', **arguments), self.assertRaises(MODULE.ConversionError):
+                        MODULE.convert(source, output, 1, 64, directory, None)
+                    self.assertEqual('previous result', output.read_text())
+                    self.assertEqual([], list(pathlib.Path(directory).glob('flibusta-epub-*')))
 
     def test_main_handles_inspection_and_validation(self):
         with tempfile.TemporaryDirectory() as directory:

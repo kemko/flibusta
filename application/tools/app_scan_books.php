@@ -1,5 +1,6 @@
 <?php
 
+require_once dirname(__DIR__) . '/config.php';
 require_once dirname(__DIR__) . '/book_metadata.php';
 
 function book_index_archive_fingerprint(string $path): string {
@@ -62,28 +63,37 @@ function book_index_scan_archives(PDO $dbh, string $books_directory, array $limi
 		}
 		$filename = $file->getFilename();
 		$fingerprint = book_index_archive_fingerprint($file->getPathname());
-		$archive = $dbh->prepare('SELECT archive_id, fingerprint FROM book_archives WHERE filename = :filename');
-		$archive->execute([':filename' => $filename]);
-		$current = $archive->fetch(PDO::FETCH_ASSOC);
-		$changed = $current === false || $current['fingerprint'] !== $fingerprint;
-		if ($current === false) {
-			$insert = $dbh->prepare("INSERT INTO book_archives (filename, size_bytes, modified_at, fingerprint, scan_state) VALUES (:filename, :size, to_timestamp(:mtime), :fingerprint, 'pending') RETURNING archive_id");
-			$insert->execute([':filename' => $filename, ':size' => $file->getSize(), ':mtime' => $file->getMTime(), ':fingerprint' => $fingerprint]);
-			$archive_id = (int)$insert->fetchColumn();
-		} else {
-			$archive_id = (int)$current['archive_id'];
-			if (!$changed) {
-				continue;
+		$dbh->beginTransaction();
+		try {
+			$dbh->prepare('SELECT pg_advisory_xact_lock(hashtext(:filename))')->execute([':filename' => $filename]);
+			$archive = $dbh->prepare('SELECT archive_id, fingerprint FROM book_archives WHERE filename = :filename');
+			$archive->execute([':filename' => $filename]);
+			$current = $archive->fetch(PDO::FETCH_ASSOC);
+			$changed = $current === false || $current['fingerprint'] !== $fingerprint;
+			if ($current === false) {
+				$insert = $dbh->prepare("INSERT INTO book_archives (filename, size_bytes, modified_at, fingerprint, scan_state) VALUES (:filename, :size, to_timestamp(:mtime), :fingerprint, 'pending') RETURNING archive_id");
+				$insert->execute([':filename' => $filename, ':size' => $file->getSize(), ':mtime' => $file->getMTime(), ':fingerprint' => $fingerprint]);
+				$archive_id = (int)$insert->fetchColumn();
+			} else {
+				$archive_id = (int)$current['archive_id'];
+				if (!$changed) {
+					$dbh->commit();
+					continue;
+				}
+				$dbh->prepare("UPDATE book_archives SET size_bytes = :size, modified_at = to_timestamp(:mtime), fingerprint = :fingerprint, scan_state = 'pending', scan_error = NULL, scanned_at = NULL WHERE archive_id = :archive_id")->execute([':size' => $file->getSize(), ':mtime' => $file->getMTime(), ':fingerprint' => $fingerprint, ':archive_id' => $archive_id]);
+				$dbh->prepare('DELETE FROM book_extracted_metadata WHERE entry_id IN (SELECT entry_id FROM book_archive_entries WHERE archive_id = :archive_id)')->execute([':archive_id' => $archive_id]);
+				$dbh->prepare('DELETE FROM book_archive_entries WHERE archive_id = :archive_id')->execute([':archive_id' => $archive_id]);
 			}
-			$dbh->prepare("UPDATE book_archives SET size_bytes = :size, modified_at = to_timestamp(:mtime), fingerprint = :fingerprint, scan_state = 'pending', scan_error = NULL, scanned_at = NULL WHERE archive_id = :archive_id")->execute([':size' => $file->getSize(), ':mtime' => $file->getMTime(), ':fingerprint' => $fingerprint, ':archive_id' => $archive_id]);
-			$dbh->prepare('DELETE FROM book_extracted_metadata WHERE entry_id IN (SELECT entry_id FROM book_archive_entries WHERE archive_id = :archive_id)')->execute([':archive_id' => $archive_id]);
-			$dbh->prepare('DELETE FROM book_archive_entries WHERE archive_id = :archive_id')->execute([':archive_id' => $archive_id]);
+			$entry = $dbh->prepare("INSERT INTO book_archive_entries (archive_id, entry_name, bookid, format, size_bytes, content_hash, scan_state) VALUES (:archive_id, :entry_name, :bookid, :format, :size, :content_hash, 'pending') ON CONFLICT (archive_id, entry_name) DO NOTHING");
+			foreach ($entries as $value) {
+				$entry->execute([':archive_id' => $archive_id, ':entry_name' => $value['entry_name'], ':bookid' => $value['bookid'], ':format' => $value['format'], ':size' => $value['size_bytes'], ':content_hash' => $value['content_hash']]);
+			}
+			$dbh->prepare("UPDATE book_archives SET scan_state = CASE WHEN EXISTS (SELECT 1 FROM book_archive_entries WHERE archive_id = :archive_id) THEN 'queued' ELSE 'complete' END, scan_error = NULL, scanned_at = CASE WHEN EXISTS (SELECT 1 FROM book_archive_entries WHERE archive_id = :archive_id) THEN NULL ELSE CURRENT_TIMESTAMP END WHERE archive_id = :archive_id")->execute([':archive_id' => $archive_id]);
+			$dbh->commit();
+		} catch (Throwable $error) {
+			$dbh->rollBack();
+			throw $error;
 		}
-		$entry = $dbh->prepare("INSERT INTO book_archive_entries (archive_id, entry_name, bookid, format, size_bytes, content_hash, scan_state) VALUES (:archive_id, :entry_name, :bookid, :format, :size, :content_hash, 'pending') ON CONFLICT (archive_id, entry_name) DO NOTHING");
-		foreach ($entries as $value) {
-			$entry->execute([':archive_id' => $archive_id, ':entry_name' => $value['entry_name'], ':bookid' => $value['bookid'], ':format' => $value['format'], ':size' => $value['size_bytes'], ':content_hash' => $value['content_hash']]);
-		}
-		$dbh->prepare("UPDATE book_archives SET scan_state = CASE WHEN EXISTS (SELECT 1 FROM book_archive_entries WHERE archive_id = :archive_id) THEN 'queued' ELSE 'complete' END, scan_error = NULL, scanned_at = CASE WHEN EXISTS (SELECT 1 FROM book_archive_entries WHERE archive_id = :archive_id) THEN NULL ELSE CURRENT_TIMESTAMP END WHERE archive_id = :archive_id")->execute([':archive_id' => $archive_id]);
 	}
 	return $seen;
 }

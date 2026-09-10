@@ -7,6 +7,7 @@ This repository runs a local Flibusta library using PHP 8.1, PostgreSQL, and ngi
 - `application/public/`: web entry points, CSS, bundled JavaScript readers, fonts, and icons.
 - `application/modules/<feature>/`: page modules, typically `index.php` and `module.conf`.
 - `application/opds/`: OPDS catalog endpoints.
+- `application/schema/`: pinned upstream FB2 schemas used to validate generated output.
 - `application/`: shared initialization, database access, rendering, and helpers.
 - `application/tools/`: database import, conversion, and maintenance scripts; `external_services_config/` documents alternate deployments.
 - `phpdocker/`: container builds and server configuration.

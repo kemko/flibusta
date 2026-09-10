@@ -101,5 +101,6 @@ final class CompilationJobsTest extends TestCase {
 		$source = json_decode($snapshot->fetchColumn(), true, 512, JSON_THROW_ON_ERROR)[0];
 		self::assertSame(hash('sha256', $data), $source['sha256']);
 		self::assertSame('books.zip', $source['archive_name']);
+		self::assertSame('https://localhost/book/view/10', $source['url']);
 	}
 }

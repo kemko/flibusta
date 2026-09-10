@@ -25,6 +25,7 @@ services:
         volumes:
             - ./application:/application:ro
             - ./README.md:/project/README.md:ro
+            - ./phpdocker/pg/init_db.sql:/project/init_db.sql:ro
             - ./docker-compose.yml:/project/docker-compose.yml:ro
             - ./phpdocker/nginx/nginx.conf:/tmp/nginx.conf:ro
         environment:
@@ -48,6 +49,7 @@ services:
             find /application -path /application/vendor -prune -o -name "*.php" -type f -exec php -l {} \; &&
             php -d pcov.enabled=1 -d pcov.directory=/application /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml --coverage-clover /tmp/php-coverage.xml &&
             php /application/tests/check_coverage.php /tmp/php-coverage.xml &&
+            php /application/tests/http_integration.php &&
             COVERAGE_FILE=/tmp/python-coverage coverage run --include=/application/tools/epub_to_fb2.py -m unittest discover -s /application/tests/python -p "test*.py" &&
             COVERAGE_FILE=/tmp/python-coverage coverage report --fail-under=80 &&
             PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall -q /application/tools/epub_to_fb2.py &&
@@ -68,5 +70,8 @@ services:
         mem_limit: 768m
         pids_limit: 128
         profiles: ["conversion"]
+        volumes:
+            - ./application:/application:ro
+        entrypoint: ["python3", "/application/tests/conversion_integration.py"]
         tmpfs:
             - /tmp:rw,noexec,nosuid,size=768m

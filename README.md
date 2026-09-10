@@ -14,9 +14,11 @@
 
 Для очередного импорта добавьте новые дампы и архивы, затем повторите операцию. Локальные таблицы индекса, задания сборников и ключи OPDS не очищаются импортом. Связи алиасов восстанавливаются из `libavtorname.masterid` и `libavtoraliase`; после импорта индекс авторов перестраивается автоматически. Успешно обработанные неизменённые записи архивов повторно не разбираются.
 
-`book-worker` раз в минуту применяет миграции, обнаруживает новые завершённые ZIP и обрабатывает их. Архивы с суффиксом `.part` и повреждённые ZIP пропускаются до следующей попытки. Для ручного запуска внутри PHP-контейнера используйте `php /application/tools/app_scan_books.php` и `php /application/tools/app_worker.php`.
+`book-worker` раз в минуту применяет миграции, обнаруживает новые завершённые ZIP и обрабатывает их. Архивы с суффиксом `.part` и повреждённые ZIP пропускаются до следующей попытки. Один запуск worker обрабатывает до 50 записей; для повторной обработки ошибок используйте `php /application/tools/app_worker.php --retry-errors` (стандартный сервис делает это автоматически). Для ручного запуска внутри PHP-контейнера используйте `php /application/tools/app_scan_books.php` и `php /application/tools/app_worker.php`.
 
 ## Индекс и поиск
+
+`FLIBUSTA_MAX_ARCHIVE_BYTES` ограничивает ZIP (по умолчанию 1 073 741 824 байта), `FLIBUSTA_MAX_ENTRY_BYTES` — распакованную запись (104 857 600 байт). Слишком большие архивы пропускаются, записи завершаются ошибкой. Передавайте одинаковые значения в окружение PHP и `book-worker`; в примерах Compose они читаются из `.env`.
 
 Индексатор сохраняет состояние архива и записи, число иллюстраций и переводчиков. Иллюстрации — уникальные ресурсы JPEG, PNG или WebP, кроме явно указанной обложки; повторная ссылка на тот же ресурс не увеличивает число, а одинаковые байты в разных ресурсах считаются разными. Ноль означает успешную обработку без иллюстраций, отсутствие значения — ещё не обработанную или ошибочную запись.
 
@@ -27,7 +29,7 @@
 Задайте как минимум следующие переменные для веб-контейнера и `book-worker`:
 
 ```
-FLIBUSTA_PUBLIC_URL=https://library.example/mylib
+FLIBUSTA_PUBLIC_URL=https://library.example
 FLIBUSTA_WEBROOT=/mylib
 FLIBUSTA_OIDC_ISSUER=https://id.example
 FLIBUSTA_OIDC_CLIENT_ID=flibusta
@@ -35,7 +37,7 @@ FLIBUSTA_OIDC_CLIENT_SECRET_FILE=/run/secrets/FLIBUSTA_OIDC_CLIENT_SECRET
 FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE=/run/secrets/FLIBUSTA_OPDS_OWNER_HMAC_KEY
 ```
 
-Callback всегда имеет вид `https://library.example/mylib/auth.php`; зарегистрируйте именно этот URL у провайдера. `FLIBUSTA_PUBLIC_URL` и issuer обязаны использовать HTTPS. Reverse proxy должен завершать TLS, передавать `Authorization` в FastCGI и не открывать `cache`, архивы, SQL, `tools`, `vendor` или `tests`. Не принимайте внешний `X-Forwarded-*` как источник публичного URL: задавайте его явно через `FLIBUSTA_PUBLIC_URL`. Пример для внешних nginx/PostgreSQL находится в [application/tools/external_services_config/README.md](application/tools/external_services_config/README.md).
+`FLIBUSTA_PUBLIC_URL` — только HTTPS origin без пути; префикс задаётся отдельно в `FLIBUSTA_WEBROOT`. Callback всегда имеет вид `https://library.example/mylib/auth.php`; зарегистрируйте именно этот URL у провайдера. `FLIBUSTA_PUBLIC_URL` и issuer обязаны использовать HTTPS. Reverse proxy должен завершать TLS, передавать `Authorization` в FastCGI и не открывать `cache`, архивы, SQL, `tools`, `vendor` или `tests`. Не принимайте внешний `X-Forwarded-*` как источник публичного URL: задавайте его явно через `FLIBUSTA_PUBLIC_URL`. Пример для внешних nginx/PostgreSQL находится в [application/tools/external_services_config/README.md](application/tools/external_services_config/README.md).
 
 Любой секрет задавайте через `*_FILE`, а не в Compose или репозитории: `FLIBUSTA_DBPASSWORD_FILE`, `FLIBUSTA_OIDC_CLIENT_SECRET_FILE`, `FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE`, `FLIBUSTA_SMTP_PASSWORD_FILE`. Файлы должны содержать ровно одно значение и быть доступны только контейнеру. `FLIBUSTA_OIDC_SCOPES` по умолчанию равен `openid`; срок сессии задаёт `FLIBUSTA_OIDC_SESSION_SECONDS`.
 
@@ -47,11 +49,13 @@ Callback всегда имеет вид `https://library.example/mylib/auth.php`
 
 Добавляйте FB2 и EPUB в корзину из списка или карточки, меняйте порядок кнопками и укажите название. Заказ сохраняет неизменяемый снимок выбранных файлов и метаданных; повторная отправка формы не создаёт второй заказ. Готовый FB2 доступен только владельцу OIDC-сессии и удаляется после `FLIBUSTA_COMPILATION_RETENTION_SECONDS` (по умолчанию 24 часа). Ограничения числа книг, размера источников, времени задачи и вложения задаются `FLIBUSTA_MAX_COMPILATION_BOOKS`, `FLIBUSTA_MAX_COMPILATION_BYTES`, `FLIBUSTA_JOB_TIMEOUT_SECONDS` и `FLIBUSTA_MAX_SMTP_ATTACHMENT_BYTES`.
 
-Сборник создаётся непосредственно в FB2: исходные FB2 объединяются, EPUB преобразуются отдельным контейнером Calibre без сети. Сохраняются текст, структура, ссылки, сноски и изображения; тонкое оформление EPUB может измениться. При обновлении Calibre запускайте `tests/run.sh`: тесты адаптера проверяют оглавление, якоря, ссылки, изображения и XSD. Не добавляйте `fb2cng` или EpubMerge в рабочие образы.
+Сборник создаётся непосредственно в FB2: исходные FB2 объединяются, EPUB преобразуются отдельным контейнером Calibre без сети. Сохраняются текст, структура, ссылки, сноски и изображения; тонкое оформление EPUB может измениться. При обновлении Calibre запускайте `tests/run.sh`: команда запускает реальный Calibre без сети и проверяет оглавление, якоря, ссылки, изображения и поставляемую схему FB2. Не добавляйте `fb2cng` или EpubMerge в рабочие образы.
 
 Для отправки задайте только во внутренних настройках `FLIBUSTA_SMTP_HOST`, `FLIBUSTA_SMTP_PORT`, `FLIBUSTA_SMTP_TLS` (`none`, `starttls` или `smtps`), `FLIBUSTA_SMTP_USER`, `FLIBUSTA_SMTP_PASSWORD_FILE`, `FLIBUSTA_SMTP_FROM` и `FLIBUSTA_SMTP_TO`. Отправляется тот же готовый файл, что выдаётся на скачивание. Статус «принято SMTP-сервером» не подтверждает доставку; после неопределённого результата повтор возможен только явной командой пользователя.
 
 ## Проверка
+
+Набор проверяет HTTP-доступ, CSRF, ротацию сессии, отдельные CLI-команды, сборку через Calibre и SMTP. Полный вход через внешний OIDC и повторный импорт полного дампа остаются эксплуатационными проверками.
 
 Перед обновлением конфигурации и образов выполните:
 

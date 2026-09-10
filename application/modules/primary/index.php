@@ -161,7 +161,7 @@ if (isset($_SESSION['search'])) {
 	$join .= 'LEFT JOIN libbook_ts USING(bookid) ';
 
 	$fcontent .= "<div class='badge bg-success p-1 text-white'>";
-	$fcontent .= "<a class='text-white' href='$webroot/?q'>" . $_SESSION['search'] . " <i class='fas fa-times-circle'></i></a></div> ";
+	$fcontent .= "<a class='text-white' href='$webroot/?q'>" . htmlspecialchars($_SESSION['search'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . " <i class='fas fa-times-circle'></i></a></div> ";
 }
 
 if (isset($_SESSION['filter_series'])) {

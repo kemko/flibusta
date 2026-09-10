@@ -28,7 +28,7 @@ function compilation_process(string $directory): void {
 			}
 			if (strtolower((string)$source['format']) === 'epub') {
 				$output = $directory . '/converted-' . $index . '.fb2';
-				$command = ['calibre-debug', '-e', '/application/tools/epub_to_fb2.py', '--', $source_path, $output, '--timeout', '900', '--memory-mib', '768', '--work-dir', $directory];
+				$command = ['calibre-debug', '-e', '/application/tools/epub_to_fb2.py', '--', $source_path, $output, '--xsd', dirname(__DIR__) . '/schema/FictionBook.xsd', '--timeout', '900', '--memory-mib', '768', '--work-dir', $directory];
 				$process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
 				if (!is_resource($process)) {
 					throw new RuntimeException('Cannot start EPUB converter');

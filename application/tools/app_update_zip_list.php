@@ -1,8 +1,9 @@
 <?php
 error_reporting(E_ALL);
-include('../dbinit.php');
+require_once dirname(__DIR__) . '/dbinit.php';
+require_once __DIR__ . '/app_scan_books.php';
 
-if ($handle = opendir('/application/flibusta')) {
+if ($handle = opendir(flibusta_config()['directories']['books'])) {
 	$stmt = $dbh->prepare("TRUNCATE book_zip;");
 	$stmt->execute();
 

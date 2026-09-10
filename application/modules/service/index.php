@@ -12,7 +12,7 @@ function get_ds($path){
 	$size = fgets ( $io, 4096);
 	$size = substr ( $size, 0, strpos ( $size, "\t" ) );
 	pclose ( $io );
-	return round($size / 1024, 1);
+	return round((float)$size / 1024, 1);
 }
 
 if (!$status_import) {
@@ -70,9 +70,9 @@ if ($status_import) {
 	$status = '';
 }
 echo "<div class='d-flex justify-content-between'>";
-echo flibusta_auth_post_form($webroot . '/', ['import' => 'sql'], "btn btn-primary m-1 $status", 'Обновить базу') . ' ';
-echo flibusta_auth_post_form($webroot . '/', ['empty' => 'cache'], 'btn btn-warning m-1', 'Очистить кэш') . ' ';
-echo flibusta_auth_post_form($webroot . '/', ['reindex' => 'metadata'], 'btn btn-warning m-1', 'Сканировать ZIP и метаданные') . ' ';
+echo flibusta_auth_post_form($webroot . '/service/', ['import' => 'sql'], "btn btn-primary m-1 $status", 'Обновить базу') . ' ';
+echo flibusta_auth_post_form($webroot . '/service/', ['empty' => 'cache'], 'btn btn-warning m-1', 'Очистить кэш') . ' ';
+echo flibusta_auth_post_form($webroot . '/service/', ['reindex' => 'metadata'], 'btn btn-warning m-1', 'Сканировать ZIP и метаданные') . ' ';
 echo "</div>";
 
 if ($status_import) {
