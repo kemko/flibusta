@@ -70,7 +70,7 @@ function book_metadata_result(array $translators, array $images, array $cover_id
 }
 
 function book_metadata_fb2(string $data): array {
-	$document = book_metadata_xml($data);
+	$document = book_metadata_fb2_document($data);
 	$xpath = new DOMXPath($document);
 	$translators = [];
 	foreach ($xpath->query('//*[local-name()="translator"]') as $translator) {
@@ -95,6 +95,14 @@ function book_metadata_fb2(string $data): array {
 		}
 	}
 	return book_metadata_result($translators, $images, $cover_ids);
+}
+
+function book_metadata_fb2_document(string $data): DOMDocument {
+	$document = book_metadata_xml($data);
+	if (!$document->documentElement instanceof DOMElement || $document->documentElement->localName !== 'FictionBook') {
+		throw new BookMetadataException('Document is not FB2');
+	}
+	return $document;
 }
 
 function book_metadata_zip_path(string $path): bool {
