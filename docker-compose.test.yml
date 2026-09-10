@@ -29,4 +29,17 @@ services:
                 condition: service_healthy
         command: >
             sh -ec 'php /application/tools/app_migrate.php &&
-            /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml'
+            /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml &&
+            python3 -m unittest discover -s /application/tests/python -p "test*.py" &&
+            PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall -q /application/tools/epub_to_fb2.py'
+    epub-converter:
+        build:
+            context: .
+            dockerfile: phpdocker/worker/Dockerfile
+        network_mode: none
+        read_only: true
+        mem_limit: 768m
+        pids_limit: 128
+        profiles: ["conversion"]
+        tmpfs:
+            - /tmp:rw,noexec,nosuid,size=768m

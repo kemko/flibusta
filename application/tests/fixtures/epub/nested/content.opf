@@ -1,0 +1,2 @@
+<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf"><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="image" href="images/image.png" media-type="image/png"/></manifest><spine><itemref idref="chapter"/></spine></package>
