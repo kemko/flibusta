@@ -23,6 +23,8 @@ function flibusta_auth_settings(?array $config = null): array {
 		'callback_url' => $public_url . $webroot . '/auth.php',
 		'login_url' => $webroot . '/auth.php',
 		'home_url' => $webroot . '/',
+		// A separately rotatable key is preferred; client_secret keeps existing deployments usable.
+		'owner_hmac_key' => (string)($config['opds']['owner_hmac_key'] ?: $oidc['client_secret']),
 	];
 }
 
@@ -102,8 +104,35 @@ function flibusta_auth_complete_login(object $claims, array $settings): void {
 	}
 	$_SESSION = [
 		'flibusta_auth_expires' => min((int)$claims->exp, time() + $settings['session_seconds']),
+		'flibusta_owner_hash' => flibusta_auth_owner_hash((string)$claims->iss, (string)$claims->sub, $settings),
 		'flibusta_csrf' => bin2hex(random_bytes(32)),
 	];
+}
+
+function flibusta_auth_owner_hash(string $issuer, string $subject, array $settings): string {
+	if (($settings['owner_hmac_key'] ?? '') === '') {
+		throw new FlibustaAuthException('OPDS owner HMAC key is unavailable');
+	}
+	return hash_hmac('sha256', $issuer . "\0" . $subject, $settings['owner_hmac_key']);
+}
+
+function flibusta_auth_owner(): ?string {
+	return flibusta_auth_is_authenticated() && isset($_SESSION['flibusta_owner_hash']) && is_string($_SESSION['flibusta_owner_hash'])
+		? $_SESSION['flibusta_owner_hash']
+		: null;
+}
+
+function flibusta_auth_require_book_access(PDO $dbh): void {
+	try {
+		$settings = flibusta_auth_settings();
+		flibusta_auth_session_start($settings);
+		if (flibusta_auth_is_authenticated()) {
+			return;
+		}
+	} catch (Throwable $error) {
+		// OPDS clients do not need a configured browser login.
+	}
+	flibusta_opds_require($dbh);
 }
 
 function flibusta_auth_clear(): void {

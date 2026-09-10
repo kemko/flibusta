@@ -11,6 +11,7 @@ require_once ROOT_PATH . 'book_files.php';
 require_once ROOT_PATH . 'book_metadata.php';
 require_once ROOT_PATH . 'author_search.php';
 require_once ROOT_PATH . 'auth.php';
+require_once ROOT_PATH . 'opds_auth.php';
 if (is_file('/opt/flibusta-vendor/autoload.php')) {
 	require_once '/opt/flibusta-vendor/autoload.php';
 }

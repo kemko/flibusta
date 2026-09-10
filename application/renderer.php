@@ -112,6 +112,7 @@ echo <<< __HTML
 <div class="d-flex">
 
 <a href='$webroot/favlist/' class='btn btn-outline-success' type='submit'>$user_name</a>
+<a href='$webroot/opds_keys/' class='btn btn-outline-info ms-2'>Ключи OPDS</a>
 <a href='$webroot/auth.php?logout=1' class='btn btn-outline-light ms-2'>Выйти</a>
 __HTML
 ?>

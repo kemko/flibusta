@@ -12,6 +12,7 @@ final class OidcTest extends TestCase {
 		'callback_url' => 'https://library.example/library/auth.php',
 		'login_url' => '/library/auth.php',
 		'home_url' => '/library/',
+		'owner_hmac_key' => 'owner-secret',
 	];
 
 	public function testRequiresHttpsAndUsesFixedCallback(): void {
@@ -54,6 +55,8 @@ final class OidcTest extends TestCase {
 		self::assertTrue(flibusta_auth_is_authenticated());
 		self::assertTrue(flibusta_auth_check_csrf(flibusta_auth_csrf_token()));
 		self::assertArrayNotHasKey('openid_connect_state', $_SESSION);
+		self::assertSame(hash_hmac('sha256', "https://issuer.example\0subject", 'owner-secret'), flibusta_auth_owner());
+		self::assertStringNotContainsString('subject', serialize($_SESSION));
 		self::assertStringContainsString('session_regenerate_id(true)', file_get_contents(dirname(__DIR__) . '/auth.php'));
 	}
 }

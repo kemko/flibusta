@@ -2,8 +2,13 @@
 ob_start();
 
 include("../init.php");
-flibusta_auth_require_web();
 decode_gurl($webroot);
+
+if ($url->mod === 'opds') {
+	flibusta_opds_require($dbh);
+} else {
+	flibusta_auth_require_web();
+}
 
 $user_name = 'Книжные полки';
 if (isset($_POST['delete_uuid'])) {

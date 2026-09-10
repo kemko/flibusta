@@ -48,6 +48,9 @@ function flibusta_config(): array {
 			'scopes' => flibusta_config_value('FLIBUSTA_OIDC_SCOPES', 'openid'),
 			'session_seconds' => flibusta_config_int('FLIBUSTA_OIDC_SESSION_SECONDS', 28800),
 		],
+		'opds' => [
+			'owner_hmac_key' => flibusta_config_value('FLIBUSTA_OPDS_OWNER_HMAC_KEY'),
+		],
 		'smtp' => [
 			'host' => flibusta_config_value('FLIBUSTA_SMTP_HOST'),
 			'port' => flibusta_config_int('FLIBUSTA_SMTP_PORT', 587),

@@ -4,9 +4,13 @@ use PHPUnit\Framework\TestCase;
 
 final class WebAccessTest extends TestCase {
 	public function testEveryDynamicPublicResourceUsesTheWebGate(): void {
-		foreach (['index.php', 'fb2.php', 'usr.php', 'extract_cover.php', 'extract_author.php', 'extract_usr.php', 'save_position.php', 'opds-opensearch.xml.php'] as $file) {
+		foreach (['index.php', 'save_position.php'] as $file) {
 			self::assertStringContainsString('flibusta_auth_require_web()', file_get_contents(dirname(__DIR__) . '/public/' . $file), $file);
 		}
+		foreach (['fb2.php', 'usr.php', 'extract_cover.php', 'extract_author.php', 'extract_usr.php'] as $file) {
+			self::assertStringContainsString('flibusta_auth_require_book_access($dbh)', file_get_contents(dirname(__DIR__) . '/public/' . $file), $file);
+		}
+		self::assertStringContainsString('flibusta_opds_require($dbh)', file_get_contents(dirname(__DIR__) . '/public/opds-opensearch.xml.php'));
 	}
 
 	public function testStateChangesArePostAndCsrfProtected(): void {
@@ -21,5 +25,6 @@ final class WebAccessTest extends TestCase {
 	public function testNginxDoesNotExposePrivateDirectories(): void {
 		$nginx = file_get_contents('/tmp/nginx.conf');
 		self::assertStringContainsString('cache|flibusta|sql|tools|vendor|tests', $nginx);
+		self::assertStringContainsString('HTTP_AUTHORIZATION $http_authorization', $nginx);
 	}
 }

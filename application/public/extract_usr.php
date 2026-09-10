@@ -1,6 +1,6 @@
 <?php
 include('../init.php');
-flibusta_auth_require_web();
+flibusta_auth_require_book_access($dbh);
 
 if (!isset($_GET['id']) || filter_var($_GET['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
 	http_response_code(404);

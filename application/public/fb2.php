@@ -6,7 +6,7 @@ if (!isset($_GET['id']) || filter_var($_GET['id'], FILTER_VALIDATE_INT, ['option
 $id = (int)$_GET['id'];
 error_reporting(E_ALL);
 include('../init.php');
-flibusta_auth_require_web();
+flibusta_auth_require_book_access($dbh);
 
 $stmt = $dbh->prepare("SELECT libbook.Title BookTitle, 
 	CONCAT(libavtorname.LastName, ' ', libavtorname.FirstName) author_name
@@ -42,4 +42,3 @@ try {
 	http_response_code(404);
 	echo 'Book file is unavailable';
 }
-
