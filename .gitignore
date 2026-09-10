@@ -1,3 +1,5 @@
 cache/*
 Flibusta.Net/*
 FlibustaSQL/*
+application/vendor/
+application/.phpunit.result.cache

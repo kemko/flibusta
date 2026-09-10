@@ -1,0 +1,31 @@
+services:
+    postgres-test:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_USER: flibusta_test
+            POSTGRES_PASSWORD: flibusta_test
+            POSTGRES_DB: flibusta_test
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U flibusta_test -d flibusta_test"]
+            interval: 1s
+            timeout: 3s
+            retries: 30
+    test:
+        build:
+            context: .
+            dockerfile: phpdocker/php-fpm/Dockerfile
+        working_dir: /application
+        volumes:
+            - ./application:/application:ro
+        environment:
+            FLIBUSTA_DBTYPE: postgres
+            FLIBUSTA_DBHOST: postgres-test
+            FLIBUSTA_DBNAME: flibusta_test
+            FLIBUSTA_DBUSER: flibusta_test
+            FLIBUSTA_DBPASSWORD: flibusta_test
+        depends_on:
+            postgres-test:
+                condition: service_healthy
+        command: >
+            sh -ec 'php /application/tools/app_migrate.php &&
+            /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml'
