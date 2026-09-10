@@ -66,6 +66,21 @@ final class AuthorSearchTest extends TestCase {
 		self::assertStringContainsString('author_search_index_name_trgm_idx', implode("\n", $plan));
 	}
 
+	public function testSurnameAndAlphabeticalPrefixDoNotDependOnFullNameSimilarity(): void {
+		$this->dbh->exec("INSERT INTO libavtorname (avtorid, lastname, firstname, middlename) VALUES (8, 'Пушкин', 'Александр', 'Сергеевич'); INSERT INTO libavtor VALUES (10, 8)");
+		author_search_rebuild($this->dbh);
+		foreach ([['Пушкин', false], ['ПУ', true]] as [$query, $prefix]) {
+			self::assertSame([8], array_map(static fn ($author): int => (int)$author->author_id, author_search_results($this->dbh, $query, 50, 0, $prefix)));
+			self::assertSame(1, (int)author_search_results($this->dbh, $query, 50, 0, $prefix)[0]->exact_match);
+			self::assertSame(1, author_search_count($this->dbh, $query, $prefix));
+		}
+		self::assertSame(0, author_search_count($this->dbh, '%', true));
+		self::assertSame([], author_search_results($this->dbh, '_', 50, 0, true));
+		self::assertCount(1, author_search_results($this->dbh, 'См', 1, 1, true));
+		self::assertSame(2, author_search_count($this->dbh, 'См', true));
+		self::assertSame([1], array_map(static fn ($author): int => (int)$author->author_id, author_search_results($this->dbh, 'Ге', 50, 0, true)));
+	}
+
 	public function testCleanupAndImportPreserveAndRebuildAuthorData(): void {
 		$cleanup = file_get_contents(dirname(__DIR__) . '/tools/cleanup_db.sql');
 		self::assertStringContainsString('libavtoraliase', $cleanup);

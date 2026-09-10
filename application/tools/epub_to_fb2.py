@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from xml.parsers import expat
 import zipfile
 from pathlib import Path
 from urllib.parse import unquote
@@ -48,11 +49,18 @@ def attribute(element, name):
 
 
 def xml_document(data, label):
-    if b'<!DOCTYPE' in data.upper() or b'<!ENTITY' in data.upper():
+    def reject_entity(*args):
         raise ConversionError('%s contains a forbidden XML declaration' % label)
+
+    # Expat recognizes declarations in every supported XML encoding and never
+    # loads an external DTD. Reject entities before ElementTree can expand them.
+    parser = expat.ParserCreate()
+    parser.EntityDeclHandler = reject_entity
+    parser.ExternalEntityRefHandler = reject_entity
     try:
+        parser.Parse(data, True)
         return ET.fromstring(data)
-    except ET.ParseError as error:
+    except (ET.ParseError, expat.ExpatError) as error:
         raise ConversionError('Invalid XML in %s: %s' % (label, error)) from error
 
 

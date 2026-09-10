@@ -61,6 +61,7 @@ final class CompilationJobsTest extends TestCase {
 		cart_prepare_job($job, $this->config);
 		$directory = cart_job_directory($this->config['directories']['cache'], $id);
 		self::assertFileExists($directory . '/manifest.json');
+		self::assertSame(1, json_decode(file_get_contents($directory . '/manifest.json'), true)['job_seconds']);
 		exec(PHP_BINARY . ' ' . escapeshellarg(dirname(__DIR__) . '/tools/app_compilation_process.php') . ' ' . escapeshellarg($directory), $output, $status);
 		self::assertSame(0, $status);
 		self::assertSame(1, cart_collect_jobs($this->dbh, $this->config));
@@ -82,6 +83,42 @@ final class CompilationJobsTest extends TestCase {
 		file_put_contents($this->directory . '/books/books.zip', 'changed');
 		$this->expectException(CartException::class);
 		cart_prepare_job($job, $this->config);
+	}
+
+	public function testWholeJobTimeoutKillsChildrenAndAllowsTheNextJob(): void {
+		$directory = $this->directory . '/stalled';
+		mkdir($directory);
+		mkdir($this->directory . '/bin');
+		$marker = $this->directory . '/survived';
+		$invocations = $this->directory . '/invocations';
+		$fixture = __DIR__ . '/fixtures/books/compilation-one.fb2';
+		$converter = $this->directory . '/bin/calibre-debug';
+		file_put_contents($converter, "#!/bin/sh\n(sleep 2; touch " . escapeshellarg($marker) . ") >/dev/null 2>&1 &\necho started >> " . escapeshellarg($invocations) . "\nsleep 0.6\ncp " . escapeshellarg($fixture) . ' "$5"' . "\n");
+		chmod($converter, 0700);
+		$sources = [];
+		foreach ([0, 1] as $index) {
+			$file = 'source-' . $index . '.epub';
+			file_put_contents($directory . '/' . $file, 'stalled converter fixture');
+			$sources[] = ['file' => $file, 'format' => 'epub'];
+		}
+		file_put_contents($directory . '/manifest.json', json_encode(['title' => 'Timeout', 'job_seconds' => 1, 'sources' => $sources]));
+		$command = 'PATH=' . escapeshellarg($this->directory . '/bin:' . getenv('PATH')) . ' ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/tools/app_compilation_process.php') . ' ' . escapeshellarg($directory);
+		$started = microtime(true);
+		exec($command, $output, $status);
+		self::assertSame(0, $status);
+		self::assertLessThan(2.5, microtime(true) - $started);
+		self::assertSame('Compilation timed out', file_get_contents($directory . '/error.txt'));
+		self::assertFileDoesNotExist($directory . '/result.fb2');
+		self::assertCount(2, file($invocations));
+		$id = '33333333-3333-4333-8333-333333333333';
+		$this->insertJob($id, 'owner-one');
+		cart_prepare_job(cart_claim_job($this->dbh, 1), $this->config);
+		$next = cart_job_directory($this->config['directories']['cache'], $id);
+		exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/tools/app_compilation_process.php') . ' ' . escapeshellarg($next), $output, $status);
+		self::assertSame(0, $status);
+		self::assertFileExists($next . '/result.fb2');
+		usleep(2200000);
+		self::assertFileDoesNotExist($marker);
 	}
 
 	public function testCreatesAnImmutableIdempotentSnapshot(): void {

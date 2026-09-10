@@ -32,6 +32,14 @@ class EpubToFb2Test(unittest.TestCase):
         with self.assertRaises(MODULE.ConversionError):
             MODULE.resolve_path('OEBPS', '../../secret.xhtml')
 
+    def test_accepts_doctypes_without_loading_dtds_or_expanding_entities(self):
+        for doctype in ['<!DOCTYPE html>', '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://127.0.0.1:1/xhtml11.dtd">']:
+            self.assertEqual('html', MODULE.xml_document((doctype + '<html/>').encode(), 'chapter').tag)
+        for declaration in ['<!ENTITY example "expanded">', '<!ENTITY example SYSTEM "file:///etc/passwd">', '<!ENTITY % example SYSTEM "http://127.0.0.1:1/entity">%example;']:
+            for encoding in ('utf-8', 'utf-16'):
+                with self.subTest(declaration=declaration, encoding=encoding), self.assertRaises(MODULE.ConversionError):
+                    MODULE.xml_document(('<!DOCTYPE html [' + declaration + ']><html/>').encode(encoding), 'chapter')
+
     def test_navigation_keeps_duplicate_targets_and_nesting(self):
         nav = MODULE.xml_document(b'<nav><ol><li><a href="chapter.xhtml#one">One</a><ol><li><a href="chapter.xhtml#one">Again</a></li></ol></li></ol></nav>', 'nav')
         toc = MODULE.nav_tree(nav, 'OEBPS')

@@ -103,19 +103,22 @@ function author_search_query_words(string $query): string {
 	return implode(' ', $words);
 }
 
-function author_search_results(PDO $dbh, string $query, int $limit = 50, int $offset = 0): array {
+function author_search_results(PDO $dbh, string $query, int $limit = 50, int $offset = 0, bool $prefix = false): array {
 	$query = author_search_normalize($query);
 	if ($query === '') {
 		return [];
 	}
 	try {
+		$match = "(index_row.source = 'name' AND index_row.normalized_name LIKE :prefix)";
+		if (!$prefix) {
+			$match .= ' OR index_row.normalized_name IN (input.query, input.words) OR index_row.normalized_name % input.query OR index_row.normalized_name % input.words';
+		}
 		$sql = "WITH input AS (SELECT CAST(:query AS text) AS query, CAST(:words AS text) AS words), matches AS (
 			SELECT index_row.canonical_author_id,
-				MAX(CASE WHEN index_row.normalized_name IN (input.query, input.words) THEN 1 ELSE 0 END) AS exact_match,
+				MAX(CASE WHEN index_row.normalized_name IN (input.query, input.words) OR (index_row.source = 'name' AND index_row.normalized_name LIKE :prefix) THEN 1 ELSE 0 END) AS exact_match,
 				MAX(GREATEST(similarity(index_row.normalized_name, input.query), similarity(index_row.normalized_name, input.words))) AS score
 			FROM author_search_index index_row CROSS JOIN input
-			WHERE index_row.normalized_name IN (input.query, input.words)
-				OR index_row.normalized_name % input.query OR index_row.normalized_name % input.words
+			WHERE {$match}
 			GROUP BY index_row.canonical_author_id
 		)
 		SELECT matches.canonical_author_id AS author_id, name.lastname, name.firstname, name.middlename, name.nickname,
@@ -133,6 +136,7 @@ function author_search_results(PDO $dbh, string $query, int $limit = 50, int $of
 		$stmt = $dbh->prepare($sql);
 		$stmt->bindValue(':query', $query);
 		$stmt->bindValue(':words', author_search_query_words($query));
+		$stmt->bindValue(':prefix', addcslashes($query, '\\%_') . ($prefix ? '%' : ' %'));
 		$stmt->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
 		$stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
 		$stmt->execute();
@@ -142,17 +146,20 @@ function author_search_results(PDO $dbh, string $query, int $limit = 50, int $of
 	}
 }
 
-function author_search_count(PDO $dbh, string $query): int {
+function author_search_count(PDO $dbh, string $query, bool $prefix = false): int {
 	$query = author_search_normalize($query);
 	if ($query === '') {
 		return 0;
 	}
 	try {
+		$match = "(index_row.source = 'name' AND index_row.normalized_name LIKE :prefix)";
+		if (!$prefix) {
+			$match .= ' OR index_row.normalized_name IN (input.query, input.words) OR index_row.normalized_name % input.query OR index_row.normalized_name % input.words';
+		}
 		$sql = "WITH input AS (SELECT CAST(:query AS text) AS query, CAST(:words AS text) AS words), matches AS (
 			SELECT index_row.canonical_author_id
 			FROM author_search_index index_row CROSS JOIN input
-			WHERE index_row.normalized_name IN (input.query, input.words)
-				OR index_row.normalized_name % input.query OR index_row.normalized_name % input.words
+			WHERE {$match}
 			GROUP BY index_row.canonical_author_id
 		)
 		SELECT COUNT(*) FROM (
@@ -165,7 +172,7 @@ function author_search_count(PDO $dbh, string $query): int {
 			HAVING COUNT(DISTINCT CASE WHEN book.deleted = '0' THEN book.bookid END) > 0
 		) AS matching_authors";
 		$stmt = $dbh->prepare($sql);
-		$stmt->execute([':query' => $query, ':words' => author_search_query_words($query)]);
+		$stmt->execute([':query' => $query, ':words' => author_search_query_words($query), ':prefix' => addcslashes($query, '\\%_') . ($prefix ? '%' : ' %')]);
 		return (int)$stmt->fetchColumn();
 	} catch (PDOException $error) {
 		return 0;

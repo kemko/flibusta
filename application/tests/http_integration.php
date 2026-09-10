@@ -101,6 +101,10 @@ try {
 	check($status === 200 && str_contains($series, 'HTTP book'), 'OPDS series feed failed');
 	[$status, $search] = request($base, '/opds/search?by=author&q=Writer', $basic);
 	check($status === 200 && str_contains($search, 'Writer'), 'OPDS search failed');
+	[$status, $alphabet] = request($base, '/opds/authorsindex', $basic);
+	check($status === 200 && str_contains($alphabet, 'prefix=1&amp;q=W'), 'OPDS alphabet lacks prefix links');
+	[$status, $authors] = request($base, '/opds/search?by=author&prefix=1&q=W', $basic);
+	check($status === 200 && str_contains($authors, 'Writer Test'), 'OPDS alphabetical prefix lost the author');
 	check(request($base, '/fb2.php?id=10', $basic)[1] === $book, 'OPDS download bytes differ');
 	check(request($base, '/cart/', $cookie)[0] === 200, 'Authenticated cart failed');
 	[$status, $card] = request($base, '/book/view/10', $cookie);

@@ -193,7 +193,7 @@ function cart_prepare_job(array $job, array $config): void {
 	if (is_file($directory . '/manifest.json')) {
 		return;
 	}
-	$manifest = ['title' => $job['title'], 'sources' => []];
+	$manifest = ['title' => $job['title'], 'job_seconds' => max(1, (int)$config['limits']['job_seconds']), 'sources' => []];
 	foreach ($sources as $index => $source) {
 		if (!is_array($source) || !isset($source['archive_name'], $source['entry_name'], $source['sha256'], $source['format'])) {
 			throw new CartException('Compilation snapshot source is invalid');

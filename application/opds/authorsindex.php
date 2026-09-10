@@ -37,7 +37,7 @@ while ($ach = $ai->fetchObject()) {
 	if ($ach->cnt>500) {
 		$url="$webroot/opds/authorsindex?letters=" . urlencode($ach->alpha);
 	} else {
-		$url="$webroot/opds/search?by=author&amp;q=" . urlencode($ach->alpha);
+		$url="$webroot/opds/search?by=author&amp;prefix=1&amp;q=" . urlencode($ach->alpha);
 	}
 	echo "<link href='$url' type='application/atom+xml;profile=opds-catalog' />";
 	echo "</entry>";
