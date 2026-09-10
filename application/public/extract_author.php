@@ -17,12 +17,11 @@ function lastm($path) {
 	}
 }
 
-if (isset($_GET['id'])) {
-	$id = $_GET['id'];
-} else {
-	$id = 0;
+$id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if ($id === false) {
+	http_response_code(400);
+	exit('Invalid author ID');
 }
-$iid = $id;
 
 header("Content-type: image/jpeg");
 
@@ -31,8 +30,8 @@ if (file_exists(ROOT_PATH . "cache/authors/$id.jpg")) {
 	die();
 }
 
-$stmt = $dbh->prepare("SELECT file FROM libapics WHERE AvtorId=$id");
-$stmt->execute();
+$stmt = $dbh->prepare('SELECT file FROM libapics WHERE AvtorId = :id');
+$stmt->execute([':id' => $id]);
 $f = $stmt->fetch();
 
 if (isset($f->file)) {

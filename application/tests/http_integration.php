@@ -120,6 +120,10 @@ try {
 	[$status, $authors] = request($base, '/opds/search?by=author&prefix=1&q=W', $basic);
 	check($status === 200 && str_contains($authors, 'Writer Test'), 'OPDS alphabetical prefix lost the author');
 	check(request($base, '/fb2.php?id=10', $basic)[1] === $book, 'OPDS download bytes differ');
+	foreach (['', '0', '-1', '../cover', '1 OR 1=1', '1; SELECT pg_sleep(2)'] as $id) {
+		check(request($base, '/extract_author.php?id=' . rawurlencode($id), $basic)[0] === 400, 'Unsafe author image ID accepted: ' . $id);
+	}
+	check(request($base, '/extract_author.php?id=1', $basic)[0] === 200, 'Valid author image ID rejected');
 	check(request($base, '/cart/', $cookie)[0] === 200, 'Authenticated cart failed');
 	[$status, $card] = request($base, '/book/view/10', $cookie);
 	check($status === 200 && str_contains($card, 'name="cart_action"'), 'Book card has no cart button without a shelf: ' . $status . ' ' . substr($card, -2000));
@@ -159,6 +163,15 @@ try {
 	check((int)$dbh->query("SELECT count(*) FROM fav WHERE user_uuid = '$original_shelf'")->fetchColumn() === 1, 'Deleting new shelf changed original favorites');
 	request($base, '/', $cookie, ['csrf' => $csrf, 'login_uuid' => $original_shelf]);
 	check(str_contains(request($base, '/favlist/', $cookie)[1], 'name="delete_uuid" value="' . $original_shelf . '"'), 'Cannot select existing shelf after fresh login');
+	$shelf_name = '<img src=x onerror=alert(1)>';
+	request($base, '/', $cookie, ['csrf' => $csrf, 'new_uuid' => $shelf_name]);
+	$select_shelf = $dbh->prepare('SELECT user_uuid FROM fav_users WHERE name = :name');
+	$select_shelf->execute([':name' => $shelf_name]);
+	$shared_shelf = $select_shelf->fetchColumn();
+	check(is_string($shared_shelf), 'HTML shelf name was not stored');
+	[$other_session, $other_csrf] = json_decode(run_command(web_user_command([PHP_BINARY, '-d', 'session.save_path=' . $directory, $login_script]), $env), true, 512, JSON_THROW_ON_ERROR);
+	[$status, $shelf_page] = request($base, '/', ['Cookie: flibusta_session=' . $other_session], ['csrf' => $other_csrf, 'login_uuid' => $shared_shelf]);
+	check($status === 200 && !str_contains($shelf_page, $shelf_name) && str_contains($shelf_page, htmlspecialchars($shelf_name, ENT_QUOTES, 'UTF-8')), 'Shared shelf name executes HTML in another session');
 	// More than one page across canonical and alias identities, including a duplicate association.
 	$dbh->exec("INSERT INTO libavtorname (avtorid, lastname, firstname, email, homepage, masterid) VALUES (2, 'Alias', 'Writer', '', '', 1)");
 	$dbh->exec("INSERT INTO libbook (bookid, title, title1, filetype, keywords, md5, fileauthor) SELECT id, 'Paged book', '', 'fb2', '', decode(md5(id::text), 'hex'), '' FROM generate_series(1000,1099) id; INSERT INTO libavtor (bookid, avtorid) SELECT id, CASE WHEN id % 2 = 0 THEN 1 ELSE 2 END FROM generate_series(1000,1099) id; INSERT INTO libavtor (bookid, avtorid) VALUES (10, 2)");
@@ -180,6 +193,13 @@ try {
 	$dbh->exec("INSERT INTO libbook (bookid, title, title1, filetype, keywords, md5, fileauthor) VALUES (11, 'EPUB & test', '', 'epub', 'A & B', decode(md5('epub'), 'hex'), ''); INSERT INTO libavtor (bookid, avtorid) VALUES (11, 1)");
 	$dbh->exec("UPDATE libseqname SET seqname = 'Series & notes' WHERE seqid = 1; INSERT INTO libseq (bookid, seqid, seqnumb) VALUES (11, 1, 3)");
 	$dbh->exec("UPDATE libavtorname SET lastname = 'Writer & O''Brien' WHERE avtorid = 1");
+	$dbh->exec("INSERT INTO libaannotations (avtorid, nid, title, body) VALUES (1, 1, '', '<p>Writer & biography<br></p>')");
+	foreach (['/opds/author?author_id=1', '/opds/author?author_id=1&seq=1'] as $path) {
+		[$status, $body] = request($base, $path, $basic);
+		check($status === 200, 'OPDS author feed failed');
+		$xml = opds_xml($body);
+		check(str_contains($xml->evaluate('string(/atom:feed/atom:title)'), "Writer & O'Brien"), 'OPDS author title changed');
+	}
 	$zip = new ZipArchive();
 	$zip->open($directory . '/source.epub', ZipArchive::CREATE);
 	$zip->addFromString('META-INF/container.xml', '<container><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
@@ -197,6 +217,17 @@ try {
 	check($link instanceof DOMElement && $link->getAttribute('type') === 'application/epub+zip', 'OPDS EPUB acquisition type is wrong');
 	[$status, $download] = request($base, $link->getAttribute('href'), $basic);
 	check($status === 200 && $download === $epub, 'EPUB acquisition did not return original bytes');
+	// Follow the rendered next-page link for a full-name search containing a typo.
+	$dbh->exec("INSERT INTO libavtorname (avtorid, lastname, firstname, email, homepage) SELECT id, 'Pagination', 'Match ' || id, '', '' FROM generate_series(2000,2050) id; INSERT INTO libavtor (bookid, avtorid) SELECT 10, id FROM generate_series(2000,2050) id");
+	author_search_rebuild($dbh);
+	$query = 'Pagination Matcch';
+	check(author_search_count($dbh, $query) === 51, 'Pagination fixture must match 51 authors');
+	[$status, $first_page] = request($base, '/authors/?q=' . rawurlencode($query), $cookie);
+	check($status === 200 && preg_match("/href='(\?page=1[^']*)'/", $first_page, $next) === 1, 'Author search has no next page');
+	[$status, $second_page] = request($base, '/authors/' . html_entity_decode($next[1], ENT_QUOTES, 'UTF-8'), $cookie);
+	preg_match_all('~/author/view/(20[0-9]{2})~', $first_page, $first_ids);
+	preg_match_all('~/author/view/(20[0-9]{2})~', $second_page, $second_ids);
+	check($status === 200 && count($first_ids[1]) === 50 && count($second_ids[1]) === 1 && count(array_unique(array_merge($first_ids[1], $second_ids[1]))) === 51, 'Author search pagination lost or duplicated matches');
 	flibusta_opds_revoke_key($dbh, $key['key_id'], 'http-owner');
 	foreach (['/opds/', '/opds/search?by=author&q=Writer', '/fb2.php?id=10'] as $path) {
 		check(request($base, $path, $basic)[0] === 401, 'Revoked key accepted: ' . $path);

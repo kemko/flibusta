@@ -25,8 +25,9 @@ function bbc2html($content) {
 }
 
 
-function show_gpager($page_count, $block_size = 100) {
+function show_gpager($page_count, $block_size = 100, array $parameters = []) {
 	global $url;
+	$query = $parameters === [] ? '' : '&amp;' . htmlspecialchars(http_build_query($parameters), ENT_QUOTES, 'UTF-8');
 	if (isset($_GET['page'])) {
 		$page = intval($_GET['page']);
 	} else {
@@ -47,7 +48,7 @@ function show_gpager($page_count, $block_size = 100) {
 		}
 
     	if ($b1 > 1) {
- 			echo "<li class='page-item'><a class='page-link' href='?page=", $b1 - 2, "' aria-label='Previous'><span aria-hidden='true'><i class='fas fa-angle-left'></i></span></a></li>";
+			echo "<li class='page-item'><a class='page-link' href='?page=", $b1 - 2, $query, "' aria-label='Previous'><span aria-hidden='true'><i class='fas fa-angle-left'></i></span></a></li>";
 	    	
     	}
 
@@ -57,12 +58,12 @@ function show_gpager($page_count, $block_size = 100) {
 			} else {
 				$pv = '';
 			}
-			echo "<li class='page-item $pv'><a class='page-link' href='?page=", $p - 1, "'>$p</a></li>";
+			echo "<li class='page-item $pv'><a class='page-link' href='?page=", $p - 1, $query, "'>$p</a></li>";
 		}
 		$pv = '';		
     	
     	if ($b2 < $page_count) {
-    		echo "<li class='page-item'><a class='page-link' href='?page=", $b2, "' aria-label='Next'><span aria-hidden='true'><i class='fas fa-angle-right'></i></span></a></li>";
+			echo "<li class='page-item'><a class='page-link' href='?page=", $b2, $query, "' aria-label='Next'><span aria-hidden='true'><i class='fas fa-angle-right'></i></span></a></li>";
     	}
 
 		echo '</ul></nav>';

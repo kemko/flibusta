@@ -65,6 +65,7 @@ $c4 = '';
 $c5 = '';
 $c6 = '';
 $cart_count = cart_count();
+$user_name = htmlspecialchars($user_name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 switch ($url->mod) {
 	case '':

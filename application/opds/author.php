@@ -27,6 +27,7 @@ $stmt->execute();
 if ($a = $stmt->fetchObject()){
     $author_name = ($a->nickname !='')?"$a->firstname $a->middlename $a->lastname ($a->nickname)"
                             :"$a->firstname  $a->middlename $a->lastname";
+    $author_name = htmlspecialchars($author_name, ENT_QUOTES | ENT_XML1, 'UTF-8');
    
     if ($seq_mode) { // show list of sequences with current author's works
        
@@ -36,7 +37,7 @@ if ($a = $stmt->fetchObject()){
         <updated>$cdt</updated>
         <icon>/favicon.ico</icon>
         <link href="$webroot/opds-opensearch.xml.php" rel="search" type="application/opensearchdescription+xml" />
-        <link href="$webroot/opds/search?by=author&searchTerm={searchTerms}" rel="search" type="application/atom+xml" />
+        <link href="$webroot/opds/search?by=author&amp;searchTerm={searchTerms}" rel="search" type="application/atom+xml" />
         <link href="$webroot/opds" rel="start" type="application/atom+xml;profile=opds-catalog" />
         _XML;
         $sequences = $dbh->prepare("SELECT distinct sn.seqid seqid, sn.seqname seqname
@@ -86,7 +87,7 @@ if ($a = $stmt->fetchObject()){
            /* if (!is_null($a->picfile)){
                 echo "&lt;img src=&quot;/extract_author.php?id=$author_id&quot; align=left style=&quot;border:5px solid #ededed; margin: 12px;&quot;&gt;&lt;p&gt;\n";
             }*/
-            echo $a->body;
+            echo htmlspecialchars($a->body, ENT_QUOTES | ENT_XML1, 'UTF-8');
             echo "\n";
             echo <<< _XML
                 </content>

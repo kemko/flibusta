@@ -52,6 +52,18 @@ class EpubToFb2Test(unittest.TestCase):
         self.assertNotIn(' ', command[0])
         self.assertIn('/tmp/source.epub', command)
 
+    def test_navigation_keeps_unlinked_group_labels(self):
+        nav = MODULE.xml_document(b'<nav><ol><li><span>Volume</span><ol><li><span>Part One</span><ol><li><a href="chapter.xhtml#one">Chapter A</a></li></ol></li></ol></li></ol></nav>', 'nav')
+        toc = MODULE.nav_tree(nav, 'OEBPS')
+        self.assertEqual(['Volume', 'Part One', 'Chapter A'], [item['title'] for item in MODULE.flattened_toc(toc)])
+        root = ET.fromstring('<FictionBook xmlns="%s"><body><section><p id="one">Chapter text</p></section></body></FictionBook>' % MODULE.FB2_NS)
+        MODULE.add_navigation(root, toc, {('OEBPS/chapter.xhtml', 'one'): 'one'}, {'one': 'one'})
+        self.assertEqual(['Volume', 'Part One', 'Chapter A'], [MODULE.text(node) for node in root.iter() if MODULE.local_name(node.tag) == 'title'])
+        self.assertEqual('Chapter text', root.find('.//{*}section/{*}section/{*}section/{*}p').text)
+        for invalid in ['<li><ol/></li>', '<li><span>Empty group</span></li>']:
+            with self.assertRaises(MODULE.ConversionError):
+                MODULE.nav_tree(ET.fromstring('<nav><ol>' + invalid + '</ol></nav>'), 'OEBPS')
+
     def test_adapter_preserves_reference_positions_and_navigation(self):
         with tempfile.TemporaryDirectory() as directory:
             source = self.make_epub(directory)

@@ -20,6 +20,8 @@ def make_epub(path, navigation=True):
         archive.writestr('META-INF/container.xml', '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
         archive.writestr('OEBPS/content.opf', '<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="3.0" unique-identifier="uid"><metadata><dc:identifier id="uid">urn:uuid:caabbabc-aabb-4000-8000-001122334455</dc:identifier><dc:title>EPUB work</dc:title><dc:creator>Writer</dc:creator><dc:language>en</dc:language><dc:contributor id="translator">EPUB Translator</dc:contributor><meta refines="#translator" property="role">trl</meta></metadata><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="img" href="image.png" media-type="image/png"/></manifest><spine><itemref idref="one"/><itemref idref="two"/></spine></package>')
         toc = '<ol><li><a href="one.xhtml">Part one</a><ol><li><a href="one.xhtml#chapter">Chapter one</a></li><li><a href="one.xhtml#note">First note</a></li></ol></li><li><a href="two.xhtml#chapter">Part two</a></li></ol>' if navigation else '<ol/>'
+        if navigation == 'grouped':
+            toc = toc.replace('<a href="one.xhtml">Part one</a>', '<span>Part one</span>')
         archive.writestr('OEBPS/nav.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc">' + toc + '</nav></body></html>')
         archive.writestr('OEBPS/one.xhtml', '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title></head><body><p id="chapter">Unique first chapter text. <a href="#note">note</a> then <a href="two.xhtml#note"><em>note</em></a>.</p><p id="note">Unique first note text.</p><p><img src="image.png" alt="image"/></p></body></html>')
         archive.writestr('OEBPS/two.xhtml', '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://127.0.0.1:1/xhtml11.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Two</title></head><body><p id="chapter">Unique second chapter text.</p><p id="note">Unique second note text. <a href="one.xhtml">back</a></p></body></html>')
@@ -27,7 +29,7 @@ def make_epub(path, navigation=True):
 
 
 def main():
-    for navigation in (True, False):
+    for navigation in (True, False, 'grouped'):
         with tempfile.TemporaryDirectory() as directory:
             job = Path(directory)
             make_epub(job / 'source-1.epub', navigation)

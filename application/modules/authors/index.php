@@ -90,7 +90,7 @@ if ($search_query !== '') {
 }
 
 echo '<div class="row">';
-show_gpager(ceil($cnt / AUTHORS_PAGE), 5);
+show_gpager(ceil($cnt / AUTHORS_PAGE), 5, $search_query === '' ? [] : ['q' => $search_query]);
 foreach ($authors as $a) {
 	if (($a->book_count ?? $a->cnt ?? 0) > 0) {
 		echo "<div class='col col-sm-6 mb-3 d-flex justify-content-between'>";
@@ -106,4 +106,4 @@ foreach ($authors as $a) {
 }
 echo "</div>";
 
-show_gpager(ceil($cnt / AUTHORS_PAGE), 5);
+show_gpager(ceil($cnt / AUTHORS_PAGE), 5, $search_query === '' ? [] : ['q' => $search_query]);

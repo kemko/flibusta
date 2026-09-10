@@ -97,12 +97,17 @@ def nav_tree(nav, base):
     def items(ol):
         result = []
         for li in element_children(ol, 'li'):
-            link = next((node for node in li.iter() if local_name(node.tag) == 'a' and attribute(node, 'href')), None)
-            if link is None:
-                continue
-            href = attribute(link, 'href')
+            label = next((node for node in li if local_name(node.tag) in {'a', 'span'}), None)
+            children = items(next(iter(element_children(li, 'ol')), ET.Element('ol')))
+            if label is None:
+                raise ConversionError('EPUB navigation item has no label')
+            href = attribute(label, 'href') if local_name(label.tag) == 'a' else None
+            if not href:
+                if not children:
+                    raise ConversionError('EPUB navigation group has no target')
+                href = children[0]['href']
             target = resolve_path(base, href)
-            result.append({'title': text(link), 'href': href, 'target': target, 'children': items(next(iter(element_children(li, 'ol')), ET.Element('ol')))})
+            result.append({'title': text(label), 'href': href, 'target': target, 'children': children})
         return result
 
     return items(roots[0])
