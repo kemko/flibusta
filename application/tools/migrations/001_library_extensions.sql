@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS compilation_jobs (
     state varchar(16) NOT NULL DEFAULT 'queued',
     error text,
     result_path text,
+	request_token varchar(64),
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at timestamptz,
     completed_at timestamptz,
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS compilation_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS compilation_jobs_owner_idx ON compilation_jobs (owner_hash, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS compilation_jobs_owner_request_idx ON compilation_jobs (owner_hash, request_token) WHERE request_token IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS opds_keys (
     key_id varchar(64) PRIMARY KEY,

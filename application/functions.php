@@ -137,6 +137,10 @@ function book_presentation_details($book): string {
 	return htmlspecialchars($illustrations, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ($translators === [] ? '' : '<br>Перевод: ' . htmlspecialchars(implode(', ', $translators), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
 }
 
+function cart_book_form(int $bookid, string $webroot): string {
+	return flibusta_auth_post_form($webroot . '/compilation.php', ['cart_action' => 'add', 'bookid' => $bookid], 'btn btn-outline-warning btn-sm', '<i class="fas fa-plus"></i><span class="visually-hidden">В корзину</span>');
+}
+
 function to_pg_array($set) {
     settype($set, 'array'); // can be called with a scalar or array
     $result = array();
@@ -198,6 +202,7 @@ function book_small_pg($book, $webroot='',$full = false) {
 	echo "<a href='$fhref' title='Скачать' type='button' class='btn btn-outline-$ft btn-sm'>$book->filetype</a>";
 //	echo "<button type='button' class='btn btn-outline-secondary btn-sm'>$book->lang</button>";
 	echo flibusta_auth_post_form($webroot . '/', [$fav_action => $book->bookid], "btn $fav btn-sm", '<i class="fas fa-heart"></i>');
+	echo cart_book_form((int)$book->bookid, $webroot);
 	
 	echo "</div></div></div>\n";
 }
@@ -249,6 +254,7 @@ function book_info_pg($book, $webroot = '', $full = false) {
 			$fav_action = 'fav_book';
 		}
 		echo flibusta_auth_post_form($webroot . '/', [$fav_action => $book->bookid], "btn $fav btn-sm", '<i class="fas fa-heart"></i>');
+		echo cart_book_form((int)$book->bookid, $webroot);
 	}
 	echo "</div>";
 	

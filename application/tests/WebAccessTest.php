@@ -4,7 +4,7 @@ use PHPUnit\Framework\TestCase;
 
 final class WebAccessTest extends TestCase {
 	public function testEveryDynamicPublicResourceUsesTheWebGate(): void {
-		foreach (['index.php', 'save_position.php'] as $file) {
+		foreach (['index.php', 'save_position.php', 'compilation.php'] as $file) {
 			self::assertStringContainsString('flibusta_auth_require_web()', file_get_contents(dirname(__DIR__) . '/public/' . $file), $file);
 		}
 		foreach (['fb2.php', 'usr.php', 'extract_cover.php', 'extract_author.php', 'extract_usr.php'] as $file) {

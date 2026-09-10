@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/app_scan_books.php';
+require_once dirname(__DIR__) . '/cart.php';
 
 function book_index_claim_entry(PDO $dbh, bool $retry_errors = false, int $stale_seconds = 900, array $excluded_entry_ids = []): ?array {
 	$states = $retry_errors ? "e.scan_state = 'error'" : "(e.scan_state = 'pending' OR (e.scan_state = 'processing' AND e.scanned_at < CURRENT_TIMESTAMP - (:stale || ' seconds')::interval))";
@@ -69,5 +70,6 @@ if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE
 	require_once dirname(__DIR__) . '/dbinit.php';
 	$config = flibusta_config();
 	$count = book_index_run_worker($dbh, $config['directories']['books'], 50, in_array('--retry-errors', $argv, true), $config['limits']);
-	echo "Processed {$count} entries\n";
+	$completed = cart_run_jobs($dbh, $config);
+	echo "Processed {$count} entries and {$completed} compilations\n";
 }

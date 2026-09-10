@@ -40,6 +40,7 @@ function flibusta_config(): array {
 			'compilation_books' => flibusta_config_int('FLIBUSTA_MAX_COMPILATION_BOOKS', 100),
 			'compilation_bytes' => flibusta_config_int('FLIBUSTA_MAX_COMPILATION_BYTES', 524288000),
 			'job_seconds' => flibusta_config_int('FLIBUSTA_JOB_TIMEOUT_SECONDS', 900),
+			'compilation_retention_seconds' => flibusta_config_int('FLIBUSTA_COMPILATION_RETENTION_SECONDS', 86400),
 		],
 		'oidc' => [
 			'issuer' => flibusta_config_value('FLIBUSTA_OIDC_ISSUER'),

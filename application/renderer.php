@@ -64,6 +64,7 @@ $c3 = '';
 $c4 = '';
 $c5 = '';
 $c6 = '';
+$cart_count = cart_count();
 
 switch ($url->mod) {
 	case '':
@@ -107,6 +108,7 @@ echo <<< __HTML
 			<li class="nav-item $c3"><a title="" class="nav-link" href="$webroot/series/">Серии</a></li>
 			<li class="nav-item $c5"><a title="" class="nav-link" href="$webroot/fav/">Полка</a></li>
 			<li class="nav-item $c6"><a title="" class="nav-link" href="$webroot/service/">Сервис</a></li>
+			<li class="nav-item"><a title="" class="nav-link" href="$webroot/cart/">Корзина <span class="badge bg-warning text-dark">$cart_count</span></a></li>
 		</ul>
 
 <div class="d-flex">
