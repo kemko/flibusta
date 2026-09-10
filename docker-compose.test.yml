@@ -62,6 +62,7 @@ services:
             - php-fpm:127.0.0.1
         command: ["nginx", "-t"]
     epub-converter:
+        user: '82:82'
         build:
             context: .
             dockerfile: phpdocker/worker/Dockerfile

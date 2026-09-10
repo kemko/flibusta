@@ -13,9 +13,7 @@ echo '<div class="block rounded" style="margin-bottom:8px;"><form method="post" 
 <?php
 
 echo '<div class="row">';
-if ($user_uuid !== '') {
-	$stmt = $dbh->prepare('SELECT * FROM fav_users WHERE user_uuid = :uuid');
-	$stmt->execute([':uuid' => $user_uuid]);
+	$stmt = $dbh->query('SELECT * FROM fav_users ORDER BY name, user_uuid');
 	while ($a = $stmt->fetch()) {
 	echo "<div class='col-sm-6'>";
 	echo "<div class='card mb-3'>";
@@ -37,11 +35,13 @@ if ($user_uuid !== '') {
 	echo "</div>";
 
 	echo "<div class='card-footer'>";
+	echo flibusta_auth_post_form($webroot . '/', ['login_uuid' => $a->user_uuid], 'btn btn-primary btn-sm', 'Выбрать');
+	if ($a->user_uuid === $user_uuid) {
 	echo flibusta_auth_post_form($webroot . '/', ['delete_uuid' => $a->user_uuid], 'btn btn-danger btn-sm float-end', 'Удалить');
+	}
 	echo "</div>";
 
 	echo "</div>";
 	echo "</div>";
-}
 }
 echo "</div>";

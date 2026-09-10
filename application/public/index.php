@@ -11,6 +11,14 @@ if ($url->mod === 'opds') {
 }
 
 $user_name = 'Книжные полки';
+if (isset($_POST['login_uuid'])) {
+	flibusta_auth_require_post_csrf();
+	$stmt = $dbh->prepare('SELECT user_uuid FROM fav_users WHERE user_uuid = :uuid');
+	$stmt->execute([':uuid' => (string)$_POST['login_uuid']]);
+	if ($uuid = $stmt->fetchColumn()) {
+		$_SESSION['user_uuid'] = $uuid;
+	}
+}
 if (isset($_POST['delete_uuid'])) {
 	flibusta_auth_require_post_csrf();
 	$uu = $_SESSION['user_uuid'] ?? '';
@@ -31,15 +39,11 @@ if (isset($_POST['new_uuid'])) {
 	flibusta_auth_require_post_csrf();
 	$nname = trim((string)$_POST['new_uuid']);
 	if ($nname !== '') {
-		$stmt = $dbh->prepare("INSERT INTO fav_users (user_uuid, name) VALUES (uuid_generate_v1(), :name)");
+		$stmt = $dbh->prepare("INSERT INTO fav_users (user_uuid, name) VALUES (uuid_generate_v1(), :name) RETURNING user_uuid");
 		$stmt->bindParam(":name", $nname);
 		$stmt->execute();
 
-		$stmt = $dbh->prepare("SELECT user_uuid FROM fav_users WHERE name=:name LIMIT 1");
-		$stmt->bindParam(":name", $nname);
-		$stmt->execute();
-		$r = $stmt->fetch();
-		$user_uuid = $r->user_uuid;
+		$user_uuid = $stmt->fetchColumn();
 		$user_name = $nname;
 		$_SESSION['user_uuid'] = $user_uuid;
 	}

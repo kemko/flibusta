@@ -102,9 +102,14 @@ function book_presentation_attach_metadata(PDO $dbh, array $books): array {
 	$in = implode(', ', $placeholders);
 	$metadata = [];
 	try {
-		$query = $dbh->prepare("SELECT DISTINCT ON (entries.bookid) entries.bookid, extracted.illustration_count, extracted.translators FROM book_archive_entries entries JOIN book_extracted_metadata extracted USING (entry_id) WHERE entries.scan_state = 'complete' AND entries.bookid IN ({$in}) ORDER BY entries.bookid, extracted.extracted_at DESC");
+		$files = book_file_find_many($dbh, $ids);
+		$query = $dbh->prepare("SELECT entries.bookid, archives.filename, entries.entry_name, extracted.illustration_count, extracted.translators FROM book_archive_entries entries JOIN book_archives archives USING (archive_id) JOIN book_extracted_metadata extracted USING (entry_id) WHERE entries.scan_state = 'complete' AND entries.bookid IN ({$in})");
 		$query->execute($parameters);
 		while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+			$file = $files[(int)$row['bookid']] ?? null;
+			if ($file === null || $file['archive_name'] !== $row['filename'] || $file['entry_name'] !== $row['entry_name']) {
+				continue;
+			}
 			$metadata[(int)$row['bookid']] = [
 				'illustration_count' => $row['illustration_count'] === null ? null : (int)$row['illustration_count'],
 				'translators' => json_decode((string)$row['translators'], true) ?: [],
@@ -168,7 +173,7 @@ function book_small_pg($book, $webroot='',$full = false) {
 	echo "<a class='w-100' href='$webroot/book/view/$book->bookid'>";
 	echo "<img class='w-100 card-image rounded-top' src='$webroot/extract_cover.php?id=$book->bookid&small' />";
 
-	$dt =DateTime::createFromFormat('Y-m-d H:i:se', $book->time)->format('Y-m-d');
+	$dt = (new DateTimeImmutable($book->time))->format('Y-m-d');
 	if (trim($book->filetype) == 'fb2') {
 		$ft = 'success';
 		$fhref = "$webroot/fb2.php?id=$book->bookid";
@@ -221,7 +226,7 @@ function book_info_pg($book, $webroot = '', $full = false) {
 	echo "<div class='col-sm-2'>";
 	echo "<img class='w-100 card-image rounded cover' src='$webroot/extract_cover.php?id=$book->bookid&small' />";
 
-	$dt =DateTime::createFromFormat('Y-m-d H:i:se', $book->time)->format('Y-m-d');
+	$dt = (new DateTimeImmutable($book->time))->format('Y-m-d');
 	if (trim($book->filetype) == 'fb2') {
 		$ft = 'success';
 		$fhref = "$webroot/fb2.php?id=$book->bookid";
@@ -254,8 +259,8 @@ function book_info_pg($book, $webroot = '', $full = false) {
 			$fav_action = 'fav_book';
 		}
 		echo flibusta_auth_post_form($webroot . '/', [$fav_action => $book->bookid], "btn $fav btn-sm", '<i class="fas fa-heart"></i>');
-		echo cart_book_form((int)$book->bookid, $webroot);
 	}
+	echo cart_book_form((int)$book->bookid, $webroot);
 	echo "</div>";
 	
 	echo "</div><div class='col-sm-10'>";

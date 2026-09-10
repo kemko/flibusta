@@ -75,7 +75,8 @@ echo <<< _XML
 <link href="$webroot/opds/" rel="start" type="application/atom+xml;profile=opds-catalog" />\n
 _XML;
 
-$books = $dbh->prepare("SELECT DISTINCT b.*
+$sequence_column = isset($_GET['seq_id']) ? ', s.seqnumb' : '';
+$books = $dbh->prepare("SELECT DISTINCT b.* $sequence_column
 	FROM libbook b
 	$join
 	WHERE

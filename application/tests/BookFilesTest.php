@@ -83,4 +83,19 @@ final class BookFilesTest extends TestCase {
 		self::assertSame('range.zip', $file['archive_name']);
 		self::assertSame('custom.epub', $file['entry_name']);
 	}
+
+	public function testResolvesNewNestedEntriesWithoutLegacyRangeRefresh(): void {
+		$dbh = new PDO(sprintf('pgsql:host=%s;dbname=%s', getenv('FLIBUSTA_DBHOST'), getenv('FLIBUSTA_DBNAME')), getenv('FLIBUSTA_DBUSER'), getenv('FLIBUSTA_DBPASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+		$dbh->exec('CREATE TEMP TABLE libbook (bookid bigint, filetype text); CREATE TEMP TABLE libfilename (bookid bigint, filename text); CREATE TEMP TABLE book_zip (filename text, usr integer, start_id bigint, end_id bigint)');
+		$dbh->exec("INSERT INTO libbook VALUES (42, 'fb2')");
+		$this->archive('new-nested.zip', ['nested/42.fb2' => '<FictionBook/>']);
+		book_index_scan_archives($dbh, $this->directory);
+		$file = book_file_find($dbh, 42, $this->directory);
+		self::assertSame('nested/42.fb2', $file['entry_name']);
+		self::assertSame('<FictionBook/>', book_file_contents($file));
+		self::assertSame(0, (int)$dbh->query('SELECT count(*) FROM book_zip')->fetchColumn());
+		self::assertSame([], book_file_find_many($dbh, []));
+		self::assertSame([], book_file_find_many($dbh, [9999], $this->directory));
+		$dbh->exec("DELETE FROM book_archives WHERE filename = 'new-nested.zip'");
+	}
 }

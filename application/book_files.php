@@ -76,7 +76,11 @@ function book_file_find_in_archives(int $bookid, string $format, ?string $libfil
 		if ($zip->open($path, ZipArchive::RDONLY) !== true) {
 			continue;
 		}
-		foreach ($names as $name) {
+		$entry_names = array_values(array_unique(array_merge($names, $archive['entry_names'] ?? [])));
+		foreach ($entry_names as $name) {
+			if (!book_file_zip_name($name)) {
+				continue;
+			}
 			$stat = $zip->statName($name);
 			if ($stat !== false && isset($stat['size']) && $stat['size'] <= $limits['entry_bytes']) {
 				$zip->close();
@@ -95,28 +99,52 @@ function book_file_find_in_archives(int $bookid, string $format, ?string $libfil
 	throw new BookFileException('Book file is unavailable');
 }
 
-function book_file_find(PDO $dbh, int $bookid, ?string $books_directory = null, array $limits = []): array {
-	$stmt = $dbh->prepare('SELECT b.filetype, f.filename AS libfilename FROM libbook b LEFT JOIN libfilename f USING (bookid) WHERE b.bookid = :bookid LIMIT 1');
-	$stmt->execute([':bookid' => $bookid]);
-	$book = $stmt->fetch(PDO::FETCH_ASSOC);
-	if ($book === false || trim((string)$book['filetype']) === '') {
-		throw new BookFileException('Book is unavailable');
+function book_file_find_many(PDO $dbh, array $bookids, ?string $books_directory = null, array $limits = []): array {
+	$bookids = array_values(array_unique(array_filter(array_map('intval', $bookids), static fn (int $id): bool => $id > 0)));
+	if ($bookids === []) {
+		return [];
 	}
-	$format = strtolower(trim((string)$book['filetype']));
-	$archives = $dbh->prepare('SELECT filename, usr, start_id, end_id FROM book_zip WHERE :bookid BETWEEN start_id AND end_id ORDER BY CASE WHEN usr = :preferred_usr THEN 0 ELSE 1 END, start_id DESC, end_id ASC, filename ASC');
-	$archives->execute([
-		':bookid' => $bookid,
-		':preferred_usr' => $format === 'fb2' ? 0 : 1,
-	]);
+	$in = implode(',', $bookids);
+	$books = $dbh->query("SELECT b.bookid, b.filetype, f.filename AS libfilename FROM libbook b LEFT JOIN libfilename f USING (bookid) WHERE b.bookid IN ({$in})")->fetchAll(PDO::FETCH_ASSOC);
+	// Keep the legacy range priority, adding actual indexed entries even without a range row.
+	$rows = $dbh->query("WITH candidates AS (
+		SELECT b.bookid, z.filename, z.usr, z.start_id, z.end_id, NULL::text AS entry_name
+		FROM libbook b JOIN book_zip z ON b.bookid BETWEEN z.start_id AND z.end_id WHERE b.bookid IN ({$in})
+		UNION ALL
+		SELECT b.bookid, a.filename, COALESCE(z.usr, CASE WHEN lower(trim(b.filetype)) = 'fb2' THEN 0 ELSE 1 END),
+			COALESCE(z.start_id, 0), COALESCE(z.end_id, 9223372036854775807), e.entry_name
+		FROM libbook b JOIN book_archive_entries e ON e.bookid = b.bookid AND e.format = lower(trim(b.filetype))
+		JOIN book_archives a USING (archive_id) LEFT JOIN book_zip z ON z.filename = a.filename
+		WHERE b.bookid IN ({$in})
+	) SELECT c.* FROM candidates c JOIN libbook b USING (bookid)
+	ORDER BY c.bookid, CASE WHEN c.usr = CASE WHEN lower(trim(b.filetype)) = 'fb2' THEN 0 ELSE 1 END THEN 0 ELSE 1 END,
+		c.start_id DESC, c.end_id ASC, c.filename, c.entry_name")->fetchAll(PDO::FETCH_ASSOC);
+	$archives = [];
+	foreach ($rows as $row) {
+		$archive = &$archives[(int)$row['bookid']][$row['filename']];
+		$archive['filename'] = $row['filename'];
+		if ($row['entry_name'] !== null) {
+			$archive['entry_names'][] = $row['entry_name'];
+		}
+		unset($archive);
+	}
 	$directories = function_exists('flibusta_config') ? flibusta_config()['directories'] : [];
-	return book_file_find_in_archives(
-		$bookid,
-		$format,
-		$book['libfilename'] === null ? null : (string)$book['libfilename'],
-		$archives->fetchAll(PDO::FETCH_ASSOC),
-		$books_directory ?? ($directories['books'] ?? '/application/flibusta'),
-		$limits
-	);
+	$result = [];
+	foreach ($books as $book) {
+		$bookid = (int)$book['bookid'];
+		try {
+			$result[$bookid] = book_file_find_in_archives($bookid, strtolower(trim((string)$book['filetype'])), $book['libfilename'],
+				array_values($archives[$bookid] ?? []), $books_directory ?? ($directories['books'] ?? '/application/flibusta'), $limits);
+		} catch (BookFileException $error) {
+			// Missing files remain unavailable; callers may still render their catalog entries.
+		}
+	}
+	return $result;
+}
+
+function book_file_find(PDO $dbh, int $bookid, ?string $books_directory = null, array $limits = []): array {
+	$files = book_file_find_many($dbh, [$bookid], $books_directory, $limits);
+	return $files[$bookid] ?? throw new BookFileException('Book file is unavailable');
 }
 
 function book_file_contents(array $book_file, array $limits = []): string {

@@ -25,6 +25,11 @@ final class ConfigurationExamplesTest extends TestCase {
 		foreach (['book-worker:', 'compilation-converter:', 'FLIBUSTA_OIDC_CLIENT_SECRET_FILE', 'FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE', 'FLIBUSTA_SMTP_PASSWORD_FILE'] as $required) {
 			self::assertStringContainsString($required, $external);
 		}
+		foreach ([$main, $external] as $compose) {
+			foreach (['book-worker', 'compilation-converter'] as $service) {
+				self::assertMatchesRegularExpression('/    ' . $service . ':\n        user: \'82:82\'/', $compose);
+			}
+		}
 	}
 
 	public function testExternalNginxForwardsAuthorizationWithoutAnIndependentBasicGate(): void {

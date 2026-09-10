@@ -54,6 +54,7 @@ services:
             - FLIBUSTA_SMTP_PASSWORD
 
     book-worker:
+        user: '82:82'
         build:
             context: ../../..
             dockerfile: phpdocker/php-fpm/Dockerfile
@@ -95,6 +96,7 @@ services:
         restart: unless-stopped
 
     compilation-converter:
+        user: '82:82'
         build:
             context: ../../..
             dockerfile: phpdocker/worker/Dockerfile
