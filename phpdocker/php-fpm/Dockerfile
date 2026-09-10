@@ -16,3 +16,5 @@ RUN apk --update add postgresql-client;\
   apk add python3;\
   apk add coreutils;
 RUN chmod +x /usr/local/bin/install-php-extensions; install-php-extensions curl gd bz2 mbstring pdo_pgsql zip
+RUN apk add py3-coverage
+RUN install-php-extensions pcov

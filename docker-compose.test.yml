@@ -43,9 +43,20 @@ services:
                 condition: service_healthy
         command: >
             sh -ec 'php /application/tools/app_migrate.php &&
-            /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml &&
-            python3 -m unittest discover -s /application/tests/python -p "test*.py" &&
-            PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall -q /application/tools/epub_to_fb2.py'
+            find /application -path /application/vendor -prune -o -name "*.php" -type f -exec php -l {} \; &&
+            php -d pcov.enabled=1 -d pcov.directory=/application /opt/flibusta-vendor/bin/phpunit -c /application/phpunit.xml --coverage-clover /tmp/php-coverage.xml &&
+            php /application/tests/check_coverage.php /tmp/php-coverage.xml &&
+            COVERAGE_FILE=/tmp/python-coverage coverage run --include=/application/tools/epub_to_fb2.py -m unittest discover -s /application/tests/python -p "test*.py" &&
+            COVERAGE_FILE=/tmp/python-coverage coverage report --fail-under=80 &&
+            PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall -q /application/tools/epub_to_fb2.py &&
+            sh -n /application/tools/app_import_sql.sh /application/tools/app_reindex.sh'
+    nginx-test:
+        image: nginx:1.27-alpine
+        volumes:
+            - ./phpdocker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+        extra_hosts:
+            - php-fpm:127.0.0.1
+        command: ["nginx", "-t"]
     epub-converter:
         build:
             context: .

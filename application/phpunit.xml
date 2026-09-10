@@ -5,4 +5,20 @@
             <directory>tests</directory>
         </testsuite>
     </testsuites>
+    <coverage includeUncoveredFiles="false">
+        <include>
+            <file>auth.php</file>
+            <file>author_search.php</file>
+            <file>book_files.php</file>
+            <file>book_metadata.php</file>
+            <file>cart.php</file>
+            <file>compilation.php</file>
+            <file>config.php</file>
+            <file>mail.php</file>
+            <file>migrations.php</file>
+            <file>opds_auth.php</file>
+            <file>tools/app_scan_books.php</file>
+            <file>tools/app_worker.php</file>
+        </include>
+    </coverage>
 </phpunit>
