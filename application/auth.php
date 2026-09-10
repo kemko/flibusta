@@ -5,7 +5,7 @@ class FlibustaAuthException extends RuntimeException {}
 function flibusta_auth_settings(?array $config = null): array {
 	$config = $config ?? flibusta_config();
 	$oidc = $config['oidc'];
-	$issuer = rtrim((string)$oidc['issuer'], '/');
+	$issuer = (string)$oidc['issuer'];
 	$public_url = rtrim((string)$config['public_url'], '/');
 	$webroot = '/' . trim((string)$config['webroot'], '/');
 	if ($webroot === '/') {

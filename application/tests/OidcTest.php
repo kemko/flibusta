@@ -43,6 +43,23 @@ final class OidcTest extends TestCase {
 		}
 	}
 
+	public function testPreservesTrailingSlashInIssuer(): void {
+		$config = flibusta_config();
+		$config['public_url'] = 'https://library.example';
+		$config['oidc']['issuer'] = 'https://issuer.example/';
+		$config['oidc']['client_id'] = 'client-id';
+		$config['opds']['owner_hmac_key'] = 'owner-secret';
+		$settings = flibusta_auth_settings($config);
+		self::assertSame($config['oidc']['issuer'], $settings['issuer']);
+		self::assertSame($settings['issuer'], flibusta_auth_client($settings)->getIssuer());
+		$claims = (object)['iss' => 'https://issuer.example/', 'aud' => ['client-id'], 'sub' => 'subject', 'exp' => time() + 60];
+		flibusta_auth_complete_login($claims, $settings);
+		self::assertTrue(flibusta_auth_is_authenticated());
+		$claims->iss = 'https://issuer.example';
+		$this->expectException(FlibustaAuthException::class);
+		flibusta_auth_validate_claims($claims, $settings);
+	}
+
 	public function testConfiguresLibraryForAuthorizationCodePkce(): void {
 		$client = flibusta_auth_client($this->settings);
 		self::assertSame('S256', $client->getCodeChallengeMethod());

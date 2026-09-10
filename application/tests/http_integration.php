@@ -189,6 +189,24 @@ try {
 		check($path === '' || (str_contains($path, 'author_id=2') && str_contains($path, 'display_type=alphabet')), 'OPDS pagination lost filters');
 	} while ($path !== '');
 	check($pages === 2 && count($ids) === 101 && count(array_unique($ids)) === 101, 'Alias pagination omitted or duplicated books');
+	foreach (['Writer Test', 'Alias Writer'] as $query) {
+		$path = '/opds/search?' . http_build_query(['by' => 'book', 'q' => $query]);
+		$ids = [];
+		$pages = 0;
+		do {
+			[$status, $body] = request($base, $path, $basic);
+			check($status === 200, 'OPDS book search page failed');
+			$xml = opds_xml($body);
+			foreach ($xml->query('/atom:feed/atom:entry/atom:id') as $id) { $ids[] = $id->textContent; }
+			$path = $xml->evaluate('string(/atom:feed/atom:link[@rel="next"]/@href)');
+			check(++$pages <= 2, 'OPDS book search pagination did not terminate');
+			if ($path !== '') {
+				parse_str(parse_url($path, PHP_URL_QUERY), $parameters);
+				check(($parameters['q'] ?? '') === $query && ($parameters['by'] ?? '') === 'book', 'OPDS book search pagination lost query');
+			}
+		} while ($path !== '');
+		check($pages === 2 && count($ids) === 101 && count(array_unique($ids)) === 101, 'OPDS book search omitted or duplicated alias books');
+	}
 	// Actual search acquisition must select the non-FB2 endpoint and preserve XML metacharacters.
 	$dbh->exec("INSERT INTO libbook (bookid, title, title1, filetype, keywords, md5, fileauthor) VALUES (11, 'EPUB & test', '', 'epub', 'A & B', decode(md5('epub'), 'hex'), ''); INSERT INTO libavtor (bookid, avtorid) VALUES (11, 1)");
 	$dbh->exec("UPDATE libseqname SET seqname = 'Series & notes' WHERE seqid = 1; INSERT INTO libseq (bookid, seqid, seqnumb) VALUES (11, 1, 3)");
