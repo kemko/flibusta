@@ -1,5 +1,6 @@
 <?php
 include("../init.php");
+flibusta_auth_require_web();
 echo <<< __HTML
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
 <ShortName>Библиотека</ShortName>

@@ -2,26 +2,29 @@
 ob_start();
 
 include("../init.php");
-session_start();
+flibusta_auth_require_web();
 decode_gurl($webroot);
 
 $user_name = 'Книжные полки';
-if (isset($_GET['login_uuid'])) {
-	$_SESSION['user_uuid'] = $_GET['login_uuid'];
-}
-
-if (isset($_GET['delete_uuid'])) {
-	$uu = $_GET['delete_uuid'];
+if (isset($_POST['delete_uuid'])) {
+	flibusta_auth_require_post_csrf();
+	$uu = $_SESSION['user_uuid'] ?? '';
+	if ($uu === '' || !hash_equals($uu, (string)$_POST['delete_uuid'])) {
+		http_response_code(403);
+		exit('Shelf is not owned by this session');
+	}
 	$stmt = $dbh->prepare("DELETE FROM fav_users WHERE user_uuid=:uuid");
 	$stmt->bindParam(":uuid", $uu);
 	$stmt->execute();
 	$st = $dbh->prepare("DELETE FROM fav WHERE user_uuid=:uuid");
 	$st->bindParam(":uuid", $uu);
 	$st->execute();
+	unset($_SESSION['user_uuid']);
 }
 
-if (isset($_GET['new_uuid'])) {
-	$nname = trim($_GET['new_uuid']);
+if (isset($_POST['new_uuid'])) {
+	flibusta_auth_require_post_csrf();
+	$nname = trim((string)$_POST['new_uuid']);
 	if ($nname !== '') {
 		$stmt = $dbh->prepare("INSERT INTO fav_users (user_uuid, name) VALUES (uuid_generate_v1(), :name)");
 		$stmt->bindParam(":name", $nname);
@@ -51,22 +54,25 @@ if (isset($_SESSION['user_uuid'])) {
 	if (isset($user->name)) {
 		$user_name = $user->name;
 
-		if (isset($_GET['fav_book'])) {
-			$id = intval($_GET['fav_book']);
+		if (isset($_POST['fav_book'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['fav_book']);
 			$st = $dbh->prepare("INSERT INTO fav (user_uuid, bookid) VALUES(:uuid, :id) ON CONFLICT DO NOTHING");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
 			$st->execute();
 		}
-		if (isset($_GET['fav_author'])) {
-			$id = intval($_GET['fav_author']);
+		if (isset($_POST['fav_author'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['fav_author']);
 			$st = $dbh->prepare("INSERT INTO fav (user_uuid, avtorid) VALUES(:uuid, :id) ON CONFLICT DO NOTHING");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
 			$st->execute();
 		}
-		if (isset($_GET['fav_seq'])) {
-			$id = intval($_GET['fav_seq']);
+		if (isset($_POST['fav_seq'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['fav_seq']);
 			$st = $dbh->prepare("DELETE FROM fav WHERE user_uuid=:uuid AND seqid=:id");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
@@ -77,22 +83,25 @@ if (isset($_SESSION['user_uuid'])) {
 			$st->execute();
 		}
 	
-		if (isset($_GET['unfav_book'])) {
-			$id = intval($_GET['unfav_book']);
+		if (isset($_POST['unfav_book'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['unfav_book']);
 			$st = $dbh->prepare("DELETE FROM fav WHERE user_uuid=:uuid AND bookid=:id");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
 			$st->execute();
 		}
-		if (isset($_GET['unfav_author'])) {
-			$id = intval($_GET['unfav_author']);
+		if (isset($_POST['unfav_author'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['unfav_author']);
 			$st = $dbh->prepare("DELETE FROM fav WHERE user_uuid=:uuid AND avtorid=:id");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
 			$st->execute();
 		}
-		if (isset($_GET['unfav_seq'])) {
-			$id = intval($_GET['unfav_seq']);
+		if (isset($_POST['unfav_seq'])) {
+			flibusta_auth_require_post_csrf();
+			$id = intval($_POST['unfav_seq']);
 			$st = $dbh->prepare("DELETE FROM fav WHERE user_uuid=:uuid AND seqid=:id");
 			$st->bindParam(":uuid", $user_uuid);
 			$st->bindParam(":id", $id);
@@ -148,4 +157,3 @@ if ($url->mod == 'opds') {
 } else {
 	include(ROOT_PATH . "renderer.php");
 }
-

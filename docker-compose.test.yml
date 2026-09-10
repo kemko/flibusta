@@ -17,6 +17,7 @@ services:
         working_dir: /application
         volumes:
             - ./application:/application:ro
+            - ./phpdocker/nginx/nginx.conf:/tmp/nginx.conf:ro
         environment:
             FLIBUSTA_DBTYPE: postgres
             FLIBUSTA_DBHOST: postgres-test

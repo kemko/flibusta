@@ -46,6 +46,7 @@ function flibusta_config(): array {
 			'client_id' => flibusta_config_value('FLIBUSTA_OIDC_CLIENT_ID'),
 			'client_secret' => flibusta_config_value('FLIBUSTA_OIDC_CLIENT_SECRET'),
 			'scopes' => flibusta_config_value('FLIBUSTA_OIDC_SCOPES', 'openid'),
+			'session_seconds' => flibusta_config_int('FLIBUSTA_OIDC_SESSION_SECONDS', 28800),
 		],
 		'smtp' => [
 			'host' => flibusta_config_value('FLIBUSTA_SMTP_HOST'),

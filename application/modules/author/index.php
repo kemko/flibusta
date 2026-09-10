@@ -24,9 +24,9 @@ try {
 	$stmt->execute();
 	$is_fav = ($stmt->fetch()->cnt > 0);
 	if (!$is_fav) {
-		echo "<a class='btn btn-secondary mt-2 w-100' href='$webroot/?fav_author=$a->avtorid'>В избранное</a>";
+		echo flibusta_auth_post_form($webroot . '/', ['fav_author' => $a->avtorid], 'btn btn-secondary mt-2 w-100', 'В избранное');
 	} else {
-		echo "<a class='btn btn-warning mt-2 w-100' href='$webroot/?unfav_author=$a->avtorid'>Из избранного</a>";
+		echo flibusta_auth_post_form($webroot . '/', ['unfav_author' => $a->avtorid], 'btn btn-warning mt-2 w-100', 'Из избранного');
 	}
 } catch (PDOException $e) {
 	//

@@ -1,17 +1,15 @@
 <?php
 include('../init.php');
-session_start();
+flibusta_auth_require_web();
+flibusta_auth_require_post_csrf();
 
-if (!isset($_GET['user_uuid'])) {
-	die();
+$user_uuid = $_SESSION['user_uuid'] ?? '';
+if ($user_uuid === '') {
+	http_response_code(409);
+	exit('No shelf selected');
 }
-
-$user_uuid = $_GET['user_uuid'];
-if ($user_uuid == "") {
-	die();
-}
-$bookid = intval($_GET['bookid']);
-$pos = floatval($_GET['pos']);
+$bookid = intval($_POST['bookid'] ?? 0);
+$pos = floatval($_POST['pos'] ?? 0);
 
 if ($pos == 0) {
 	$stmt = $dbh->prepare("DELETE FROM progress WHERE user_uuid=:uuid AND bookid=:id");

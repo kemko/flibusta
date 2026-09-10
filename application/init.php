@@ -10,14 +10,13 @@ require_once ROOT_PATH . 'config.php';
 require_once ROOT_PATH . 'book_files.php';
 require_once ROOT_PATH . 'book_metadata.php';
 require_once ROOT_PATH . 'author_search.php';
+require_once ROOT_PATH . 'auth.php';
 if (is_file('/opt/flibusta-vendor/autoload.php')) {
 	require_once '/opt/flibusta-vendor/autoload.php';
 }
 include(ROOT_PATH . 'functions.php');
 include(ROOT_PATH . 'dbinit.php');
 include_once(ROOT_PATH . 'webroot.php');
-session_set_cookie_params(3600 * 24 * 31 * 12,"/");
-#session_start();
 
 error_reporting(E_ALL);
 

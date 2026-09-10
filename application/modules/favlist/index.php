@@ -1,6 +1,7 @@
 <?php 
-echo '<div class="block rounded" style="margin-bottom:8px;"><form action="'.$webroot.'/favlist/">'; ?>
+echo '<div class="block rounded" style="margin-bottom:8px;"><form method="post" action="'.$webroot.'/">'; ?>
 <div class="input-group mb-3">
+	<input type="hidden" name="csrf" value="<?php echo htmlspecialchars(flibusta_auth_csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
    <input name="new_uuid" type="text" class="form-control" placeholder="Новая полка" aria-label="Новая полка" aria-describedby="basic-addon2">
    <div class="input-group-append">
    <input type="submit" class="btn btn-outline-secondary" value="Создать">
@@ -10,15 +11,17 @@ echo '<div class="block rounded" style="margin-bottom:8px;"><form action="'.$web
 </div>
 
 <?php
-$stmt = $dbh->query("SELECT * FROM fav_users");
 
 echo '<div class="row">';
-while ($a = $stmt->fetch()) {
+if ($user_uuid !== '') {
+	$stmt = $dbh->prepare('SELECT * FROM fav_users WHERE user_uuid = :uuid');
+	$stmt->execute([':uuid' => $user_uuid]);
+	while ($a = $stmt->fetch()) {
 	echo "<div class='col-sm-6'>";
 	echo "<div class='card mb-3'>";
 
 	echo "<div class='card-header'>";
-	echo "<a href='$webroot/fav/?login_uuid=$a->user_uuid'>$a->name</a>";
+	echo htmlspecialchars($a->name, ENT_QUOTES, 'UTF-8');
 	echo "</div>";
 
 	echo "<div class='card-body'>";
@@ -34,11 +37,11 @@ while ($a = $stmt->fetch()) {
 	echo "</div>";
 
 	echo "<div class='card-footer'>";
-	echo "<a class='btn btn-danger btn-sm float-end' href='$webroot/favlist/?delete_uuid=$a->user_uuid'>Удалить</a>";
+	echo flibusta_auth_post_form($webroot . '/', ['delete_uuid' => $a->user_uuid], 'btn btn-danger btn-sm float-end', 'Удалить');
 	echo "</div>";
 
 	echo "</div>";
 	echo "</div>";
 }
+}
 echo "</div>";
-

@@ -185,10 +185,10 @@ function book_small_pg($book, $webroot='',$full = false) {
 	$stmt->execute();
 	if ($stmt->fetch()->cnt > 0) {
 		$fav = 'btn-primary';
-		$fav_url = "?unfav_book=$book->bookid";
+		$fav_action = 'unfav_book';
 	} else {
 		$fav = 'btn-outline-secondary';
-		$fav_url = "?fav_book=$book->bookid";
+		$fav_action = 'fav_book';
 	}
 
 	echo "<div>$book->title</div></a>";
@@ -197,7 +197,7 @@ function book_small_pg($book, $webroot='',$full = false) {
 	echo "<button type='button' class='btn btn-outline-secondary btn-sm'>$year</button>";
 	echo "<a href='$fhref' title='Скачать' type='button' class='btn btn-outline-$ft btn-sm'>$book->filetype</a>";
 //	echo "<button type='button' class='btn btn-outline-secondary btn-sm'>$book->lang</button>";
-	echo "<a href='$fav_url' title='В избранное' type='button' class='btn $fav btn-sm'><i class='fas fa-heart'></i></a>";
+	echo flibusta_auth_post_form($webroot . '/', [$fav_action => $book->bookid], "btn $fav btn-sm", '<i class="fas fa-heart"></i>');
 	
 	echo "</div></div></div>\n";
 }
@@ -243,12 +243,12 @@ function book_info_pg($book, $webroot = '', $full = false) {
 		$stmt->execute();
 		if ($stmt->fetch()->cnt > 0) {
 			$fav = 'btn-primary';
-			$fav_url = "?unfav_book=$book->bookid";
+			$fav_action = 'unfav_book';
 		} else {
 			$fav = 'btn-outline-secondary';
-			$fav_url = "?fav_book=$book->bookid";
+			$fav_action = 'fav_book';
 		}
-		echo "<a href='$fav_url' title='В избранное' type='button' class='btn $fav btn-sm'><i class='fas fa-heart'></i></a>";
+		echo flibusta_auth_post_form($webroot . '/', [$fav_action => $book->bookid], "btn $fav btn-sm", '<i class="fas fa-heart"></i>');
 	}
 	echo "</div>";
 	

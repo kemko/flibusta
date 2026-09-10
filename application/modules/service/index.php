@@ -42,19 +42,22 @@ if (!$status_import) {
 <?php
 
 
-if (isset($_GET['empty'])) {
+if (isset($_POST['empty'])) {
+	flibusta_auth_require_post_csrf();
 	shell_exec('rm /application/cache/authors/*');
 	shell_exec('rm /application/cache/covers/*');
 	header("location:$webroot/service/");
 }
 
 if (!$status_import) {
-	if (isset($_GET['import'])) {
+	if (isset($_POST['import'])) {
+		flibusta_auth_require_post_csrf();
 		shell_exec('stdbuf -o0 /application/tools/app_import_sql.sh 2>/dev/null >/dev/null &');
 		$status_fetch = true;
 		header("location:$webroot/service/");
 	}
-	if (isset($_GET['reindex'])) {
+	if (isset($_POST['reindex'])) {
+		flibusta_auth_require_post_csrf();
 		shell_exec('stdbuf -o0 /application/tools/app_reindex.sh 2>/dev/null >/dev/null &');
 		$status_fetch = true;
 		header("location:$webroot/service/");
@@ -67,9 +70,9 @@ if ($status_import) {
 	$status = '';
 }
 echo "<div class='d-flex justify-content-between'>";
-echo "<a class='btn btn-primary m-1 $status' href='?import=sql'>Обновить базу</a> ";
-echo "<a class='btn btn-warning m-1' href='?empty=cache'>Очистить кэш</a> ";
-echo "<a class='btn btn-warning m-1' href='?reindex'>Сканировать ZIP и метаданные</a> ";
+echo flibusta_auth_post_form($webroot . '/', ['import' => 'sql'], "btn btn-primary m-1 $status", 'Обновить базу') . ' ';
+echo flibusta_auth_post_form($webroot . '/', ['empty' => 'cache'], 'btn btn-warning m-1', 'Очистить кэш') . ' ';
+echo flibusta_auth_post_form($webroot . '/', ['reindex' => 'metadata'], 'btn btn-warning m-1', 'Сканировать ZIP и метаданные') . ' ';
 echo "</div>";
 
 if ($status_import) {

@@ -1,5 +1,6 @@
 <?php
 include('../init.php');
+flibusta_auth_require_web();
 $cover = '';
 $q = 75;
 header('Cache-Control: public, max-age=86400');

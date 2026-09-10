@@ -165,7 +165,7 @@ if (isset($_SESSION['search'])) {
 }
 
 if (isset($_SESSION['filter_series'])) {
-	$fcontent .= "<a class='btn btn-sm btn-info float-end' href='$webroot/?fav_seq=$seqid'>$seqname в Избранное</a> ";
+	$fcontent .= flibusta_auth_post_form($webroot . '/', ['fav_seq' => $seqid], 'btn btn-sm btn-info float-end', htmlspecialchars($seqname, ENT_QUOTES, 'UTF-8') . ' в Избранное') . ' ';
 }
 
 echo "<div class='block rounded' style='margin-bottom:8px;'>";

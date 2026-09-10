@@ -1,5 +1,6 @@
 <?php
 include('../init.php');
+flibusta_auth_require_web();
 
 if (!isset($_GET['id']) || filter_var($_GET['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
 	http_response_code(404);
@@ -35,4 +36,3 @@ try {
 	http_response_code(404);
 	echo 'Book file is unavailable';
 }
-

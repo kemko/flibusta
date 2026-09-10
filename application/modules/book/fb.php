@@ -6,9 +6,9 @@ window.addEventListener('scroll', function ( event ) {
 	isScrolling = setTimeout(function() {
 		console.log( this.scrollY );
 		var x = new XMLHttpRequest();
-		x.open("GET", "<?php echo "$webroot/save_position.php?user_uuid=$user_uuid&bookid=$url->var1&pos=";?>" 
-		+ (100 / document.body.scrollHeight * this.scrollY), true);
-		x.send(null);
+		x.open("POST", "<?php echo "$webroot/save_position.php";?>", true);
+		x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+		x.send("csrf=<?php echo rawurlencode(flibusta_auth_csrf_token()); ?>&bookid=<?php echo (int)$url->var1; ?>&pos=" + encodeURIComponent(100 / document.body.scrollHeight * this.scrollY));
 	}, 66);
 
 }, false);
