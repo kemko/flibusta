@@ -1,11 +1,15 @@
 <?php
 
+if (is_file('/opt/flibusta-vendor/autoload.php')) {
+	require_once '/opt/flibusta-vendor/autoload.php';
+}
 require_once dirname(__DIR__) . '/config.php';
 require_once dirname(__DIR__) . '/migrations.php';
 require_once dirname(__DIR__) . '/book_files.php';
 require_once dirname(__DIR__) . '/book_metadata.php';
 require_once dirname(__DIR__) . '/compilation.php';
 require_once dirname(__DIR__) . '/cart.php';
+require_once dirname(__DIR__) . '/mail.php';
 require_once dirname(__DIR__) . '/author_search.php';
 require_once dirname(__DIR__) . '/auth.php';
 require_once dirname(__DIR__) . '/opds_auth.php';

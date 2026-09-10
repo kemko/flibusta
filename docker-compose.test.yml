@@ -1,4 +1,11 @@
 services:
+    smtp-test:
+        image: axllent/mailpit:v1.28.0
+        healthcheck:
+            test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8025/livez"]
+            interval: 1s
+            timeout: 3s
+            retries: 30
     postgres-test:
         image: postgres:16-alpine
         environment:
@@ -24,8 +31,15 @@ services:
             FLIBUSTA_DBNAME: flibusta_test
             FLIBUSTA_DBUSER: flibusta_test
             FLIBUSTA_DBPASSWORD: flibusta_test
+            FLIBUSTA_SMTP_HOST: smtp-test
+            FLIBUSTA_SMTP_PORT: 1025
+            FLIBUSTA_SMTP_TLS: none
+            FLIBUSTA_SMTP_FROM: library@example.test
+            FLIBUSTA_SMTP_TO: reader@example.test
         depends_on:
             postgres-test:
+                condition: service_healthy
+            smtp-test:
                 condition: service_healthy
         command: >
             sh -ec 'php /application/tools/app_migrate.php &&

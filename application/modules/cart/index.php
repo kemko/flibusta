@@ -18,8 +18,14 @@ if ($owner_hash !== null) {
 	$statement = $dbh->prepare('SELECT job_id, title, state, error, created_at FROM compilation_jobs WHERE owner_hash = :owner_hash ORDER BY created_at DESC LIMIT 20');
 	$statement->execute([':owner_hash' => $owner_hash]);
 	$jobs = $statement->fetchAll(PDO::FETCH_ASSOC);
+	$mail_requests = compilation_mail_requests_for_owner($dbh, $owner_hash);
 }
 $state_names = ['queued' => 'ожидает', 'processing' => 'выполняется', 'ready' => 'готов', 'error' => 'ошибка'];
+$mail_state_names = ['queued' => 'ожидает отправки', 'processing' => 'отправляется', 'accepted' => 'принято SMTP-сервером (доставка не подтверждена)', 'unknown' => 'результат SMTP неизвестен'];
+$mail_by_job = [];
+foreach ($mail_requests ?? [] as $request) {
+	$mail_by_job[$request['job_id']] ??= $request;
+}
 
 echo '<h3>Корзина сборника</h3>';
 if (is_string($error)) {
@@ -55,6 +61,14 @@ if ($jobs !== []) {
 		echo '<tr><td>' . htmlspecialchars($job['title'], ENT_QUOTES, 'UTF-8') . '</td><td>' . htmlspecialchars($state . ($job['error'] ? ': ' . $job['error'] : ''), ENT_QUOTES, 'UTF-8') . '</td><td>';
 		if ($job['state'] === 'ready') {
 			echo '<a class="btn btn-success btn-sm" href="' . htmlspecialchars($webroot . '/compilation.php?download=' . rawurlencode($job['job_id']), ENT_QUOTES, 'UTF-8') . '">Скачать FB2</a>';
+			$mail = $mail_by_job[$job['job_id']] ?? null;
+			if ($mail !== null) {
+				echo '<small class="d-block mt-1">Почта: ' . htmlspecialchars(($mail_state_names[$mail['state']] ?? $mail['state']) . ($mail['error'] ? ': ' . $mail['error'] : ''), ENT_QUOTES, 'UTF-8') . '</small>';
+			}
+			if ($mail === null || $mail['state'] === 'unknown') {
+				$token = compilation_mail_request_token((string)$job['job_id'], $mail !== null);
+				echo flibusta_auth_post_form($webroot . '/compilation.php', ['cart_action' => 'send_mail', 'job_id' => $job['job_id'], 'request_token' => $token], 'btn btn-outline-primary btn-sm', $mail === null ? 'Отправить по почте' : 'Повторить отправку');
+			}
 		}
 		echo '</td></tr>';
 	}

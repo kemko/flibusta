@@ -35,6 +35,10 @@ try {
 		cart_move($bookid, (int)($_POST['direction'] ?? 0));
 	} elseif ($action === 'create') {
 		cart_create_job($dbh, $owner_hash, (string)($_POST['title'] ?? ''), cart_items(), (string)($_POST['request_token'] ?? ''), $config);
+	} elseif ($action === 'send_mail') {
+		$job_id = (string)($_POST['job_id'] ?? '');
+		compilation_mail_create_request($dbh, $job_id, $owner_hash, (string)($_POST['request_token'] ?? ''), $config);
+		compilation_mail_forget_request_token($job_id);
 	} else {
 		throw new CartException('Unknown cart action');
 	}

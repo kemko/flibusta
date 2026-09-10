@@ -71,5 +71,6 @@ if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE
 	$config = flibusta_config();
 	$count = book_index_run_worker($dbh, $config['directories']['books'], 50, in_array('--retry-errors', $argv, true), $config['limits']);
 	$completed = cart_run_jobs($dbh, $config);
-	echo "Processed {$count} entries and {$completed} compilations\n";
+	$mailed = compilation_mail_process_requests($dbh, $config);
+	echo "Processed {$count} entries, {$completed} compilations and {$mailed} mail requests\n";
 }

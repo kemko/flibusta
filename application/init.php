@@ -11,6 +11,7 @@ require_once ROOT_PATH . 'book_files.php';
 require_once ROOT_PATH . 'book_metadata.php';
 require_once ROOT_PATH . 'compilation.php';
 require_once ROOT_PATH . 'cart.php';
+require_once ROOT_PATH . 'mail.php';
 require_once ROOT_PATH . 'author_search.php';
 require_once ROOT_PATH . 'auth.php';
 require_once ROOT_PATH . 'opds_auth.php';
