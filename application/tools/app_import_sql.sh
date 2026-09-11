@@ -1,5 +1,7 @@
 #!/bin/sh
+set -e
 . /application/tools/dbinit.sh
+trap 'echo "Ошибка импорта. Импорт остановлен." >>/application/sql/status' EXIT
 php /application/tools/app_migrate.php
 
 mkdir -p /application/sql/psql
@@ -63,3 +65,4 @@ echo "Сканирование метаданных книг">>/application/sql/
 php /application/tools/app_worker.php
 
 echo "">/application/sql/status
+trap - EXIT

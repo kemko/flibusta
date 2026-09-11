@@ -1,22 +1,27 @@
-#/bin/sh
+#!/bin/sh
+set -e
 echo "Конвертация $1">>/application/sql/status
-if ! grep -q INSERT "/application/sql/$1"; then   
+[ -f "/application/sql/$1" ] || exit 1
+if ! grep -q '^INSERT INTO' "/application/sql/$1"; then
   echo "Empty table">>/application/sql/status;
-  exit 1
+  exit 0
 fi
 
 
 
-xtable="cat /application/sql/$1|grep 'CREATE TABLE'|awk '{print \$3}'| sed 's/^.//;s/.$//'"
-table=$(eval "$xtable")
+table=$(awk '/^CREATE TABLE/ {gsub(/`/, "", $3); print $3; exit}' "/application/sql/$1")
+case "$table" in
+  ''|*[!a-zA-Z0-9_]*) echo "Invalid table name" >&2; exit 1 ;;
+esac
 
 echo $1
-echo "TRUNCATE $table;">/application/sql/tmp.sql
 echo $table
-cat /application/sql/$1|grep INSERT|tr -d \`|sed "s/$table/$table/g">>/application/sql/tmp.sql
-/application/tools/app_db_converter.py /application/sql/tmp.sql /application/sql/psql/$1
+grep '^INSERT INTO' "/application/sql/$1" | tr -d '\`' >/application/sql/tmp.sql
+python3 /application/tools/app_db_converter.py /application/sql/tmp.sql "/application/sql/psql/$1"
 rm /application/sql/tmp.sql
 
 echo "Импорт $1">>/application/sql/status
-$SQL_CMD -f /application/sql/psql/$1
-
+$SQL_CMD -X --single-transaction -v ON_ERROR_STOP=1 -v import_table="$table" \
+  -f /application/tools/import_prepare.sql \
+  -f "/application/sql/psql/$1" \
+  -f /application/tools/import_finish.sql

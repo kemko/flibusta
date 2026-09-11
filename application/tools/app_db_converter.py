@@ -3,6 +3,7 @@
 """
 Fixes a MySQL dump made with the right format so it can be directly
 imported to a new PostgreSQL database.
+The caller must execute the output in a transaction (psql --single-transaction).
 
 Dump using:
 mysqldump --compatible=postgresql --default-character-set=utf8 -r databasename.mysql -u root databasename
@@ -50,7 +51,6 @@ def parse(input_filename, output_filename):
 
 
     output.write("-- Converted by db_converter\n")
-    output.write("START TRANSACTION;\n")
     output.write("SET standard_conforming_strings=off;\n")
     output.write("SET escape_string_warning=off;\n")
     output.write("SET CONSTRAINTS ALL DEFERRED;\n\n")
@@ -195,8 +195,6 @@ def parse(input_filename, output_filename):
 
     # Finish file
     output.write("\n-- Post-data save --\n")
-    output.write("COMMIT;\n")
-    output.write("START TRANSACTION;\n")
 
     # Write typecasts out
     output.write("\n-- Typecasts --\n")
@@ -220,7 +218,6 @@ def parse(input_filename, output_filename):
 
     # Finish file
     output.write("\n")
-    output.write("COMMIT;\n")
     print("")
 
 
