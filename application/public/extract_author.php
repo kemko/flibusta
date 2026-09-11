@@ -36,13 +36,13 @@ $f = $stmt->fetch();
 
 if (isset($f->file)) {
 	$zip = new ZipArchive(); 
-	if ($zip->open(ROOT_PATH . "cache/lib.a.attached.zip")) {
+	if ($zip->open(ROOT_PATH . "cache/lib.a.attached.zip") === true) {
 		$f = $zip->getFromName($f->file);
-		if (strlen($f) > 0) {
+		$zip->close();
+		if ($f !== false && strlen($f) > 0) {
 			file_put_contents(ROOT_PATH . "cache/authors/$id.jpg", $f);
 			echo $f;
 			die();
 		}
 	}
-	$zip->close();
 }

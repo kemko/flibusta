@@ -73,9 +73,10 @@ $f = $stmt->fetch();
 
 if (isset($f->file)) {
 	$zip = new ZipArchive(); 
-	if ($zip->open(ROOT_PATH . "cache/lib.b.attached.zip")) {
+	if ($zip->open(ROOT_PATH . "cache/lib.b.attached.zip") === true) {
 		$f = $zip->getFromName($f->file);
-		if (strlen($f) > 0) {
+		$zip->close();
+		if ($f !== false && strlen($f) > 0) {
 			file_put_contents(ROOT_PATH . "cache/covers/$id.jpg", $f);
 			$thm = resizeCover($f, 300, 400);
 			imagejpeg($thm, ROOT_PATH . "cache/covers/$id-small.jpg", 75);
@@ -91,7 +92,6 @@ if (isset($f->file)) {
 			}
 		}
 	}
-	$zip->close();
 }
 
 

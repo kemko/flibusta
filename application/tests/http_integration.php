@@ -124,6 +124,13 @@ try {
 		check(request($base, '/extract_author.php?id=' . rawurlencode($id), $basic)[0] === 400, 'Unsafe author image ID accepted: ' . $id);
 	}
 	check(request($base, '/extract_author.php?id=1', $basic)[0] === 200, 'Valid author image ID rejected');
+	// Image records may exist even when the optional attachment archives are absent.
+	check(!file_exists('/application/cache/lib.a.attached.zip') && !file_exists('/application/cache/lib.b.attached.zip'), 'Image regression requires absent attachment archives');
+	$dbh->exec("INSERT INTO libapics (avtorid, nid, file) VALUES (1, 1, 'author.jpg'); INSERT INTO libbpics (bookid, nid, file) VALUES (10, 1, 'cover.jpg')");
+	[$status, $portrait] = request($base, '/extract_author.php?id=1', $basic);
+	check($status === 200 && $portrait === '', 'Missing author archive must not cause a fatal error');
+	[$status, $cover] = request($base, '/extract_cover.php?id=10', $basic);
+	check($status === 200 && $cover === file_get_contents('/application/none.jpg'), 'Missing cover archive must fall back to the placeholder');
 	check(request($base, '/cart/', $cookie)[0] === 200, 'Authenticated cart failed');
 	[$status, $card] = request($base, '/book/view/10', $cookie);
 	check($status === 200 && str_contains($card, 'name="cart_action"'), 'Book card has no cart button without a shelf: ' . $status . ' ' . substr($card, -2000));

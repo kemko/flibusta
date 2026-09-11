@@ -48,8 +48,25 @@ function book_file_zip_contents(ZipArchive $zip, string $entry_name, int $entry_
 		throw new BookFileException('Archive entry is unavailable or exceeds size limit');
 	}
 	$data = $zip->getFromName($entry_name);
+	if ($data === false && $zip->status === ZipArchive::ER_COMPNOTSUPP && $stat['comp_method'] === 98 && ($stat['encryption_method'] ?? 0) === 0) {
+		// libzip cannot decode ZIP PPMd. Read one literal entry without extracting files.
+		$process = proc_open(['timeout', '-s', 'KILL', '30s', '7z', 'e', '-tzip', '-so', '-spd', '-y', '-i!' . $entry_name, '--', $zip->filename],
+			[0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+		if (!is_resource($process)) {
+			throw new BookFileException('Cannot start PPMd decoder');
+		}
+		try {
+			$data = stream_get_contents($pipes[1], $stat['size'] + 1);
+		} finally {
+			fclose($pipes[1]);
+			$status = proc_close($process);
+		}
+		if ($status !== 0 || $data === false || strlen($data) !== $stat['size'] || sprintf('%u', crc32($data)) !== sprintf('%u', $stat['crc'])) {
+			throw new BookFileException('Cannot read PPMd archive entry (decoder failed, timed out or integrity check failed)');
+		}
+	}
 	if ($data === false || strlen($data) > $entry_limit) {
-		throw new BookFileException('Cannot read archive entry');
+		throw new BookFileException('Cannot read archive entry: ' . $zip->getStatusString());
 	}
 	return $data;
 }

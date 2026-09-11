@@ -26,6 +26,70 @@ final class BookFilesTest extends TestCase {
 		$zip->close();
 	}
 
+	private function ppmdArchive(array $entries): string {
+		foreach ($entries as $name => $contents) {
+			file_put_contents($this->directory . '/' . $name, $contents);
+		}
+		$path = $this->directory . '/ppmd.zip';
+		$process = proc_open(array_merge(['7z', 'a', '-tzip', '-mm=PPMd', '-spd', '--', $path], array_map(static fn ($name) => './' . $name, array_keys($entries))),
+			[0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, $this->directory);
+		self::assertIsResource($process);
+		self::assertSame(0, proc_close($process));
+		return $path;
+	}
+
+	public function testReadsPpmdBookAndItsEmbeddedCover(): void {
+		$cover = file_get_contents(dirname(__DIR__) . '/none.jpg');
+		$book = '<FictionBook xmlns:l="http://www.w3.org/1999/xlink"><description><title-info><coverpage><image l:href="#cover"/></coverpage></title-info></description><body><section><p>PPMd book</p></section></body><binary id="cover">' . base64_encode($cover) . '</binary></FictionBook>';
+		$path = $this->ppmdArchive(['42.fb2' => $book]);
+		$zip = new ZipArchive();
+		self::assertTrue($zip->open($path) === true);
+		self::assertSame(98, $zip->statName('42.fb2')['comp_method']);
+		$zip->close();
+		$file = book_file_find_in_archives(42, 'fb2', null, [['filename' => 'ppmd.zip']], $this->directory);
+		self::assertSame($book, book_file_contents($file));
+		self::assertSame($cover, book_metadata_for_file($file)['cover_data']);
+		$this->expectException(BookFileException::class);
+		book_file_contents($file, ['entry_bytes' => strlen($book) - 1]);
+	}
+
+	public function testPpmdEntryNamesAreLiteralArguments(): void {
+		$entries = ['42*.fb2' => 'literal wildcard', '42x.fb2' => 'other book', '$(touch injected).fb2' => 'literal shell syntax', '@list.fb2' => 'literal list prefix', '-switch.fb2' => 'literal switch prefix'];
+		$path = $this->ppmdArchive($entries);
+		$zip = new ZipArchive();
+		self::assertTrue($zip->open($path) === true);
+		try {
+			foreach ($entries as $name => $contents) {
+				self::assertSame($contents, book_file_zip_contents($zip, $name, 100));
+			}
+			self::assertFileDoesNotExist($this->directory . '/injected');
+		} finally {
+			$zip->close();
+		}
+	}
+
+	/** @dataProvider damagedPpmdHeaders */
+	public function testRejectsDamagedPpmdEntries(int $local_offset, int $central_offset, int $value): void {
+		$path = $this->ppmdArchive(['42.fb2' => str_repeat('book content', 100)]);
+		$data = file_get_contents($path);
+		$central = strpos($data, "PK\x01\x02");
+		$data = substr_replace($data, pack('V', $value), $local_offset, 4);
+		$data = substr_replace($data, pack('V', $value), $central + $central_offset, 4);
+		file_put_contents($path, $data);
+		$zip = new ZipArchive();
+		self::assertTrue($zip->open($path) === true);
+		try {
+			$this->expectException(BookFileException::class);
+			book_file_zip_contents($zip, '42.fb2', 2000);
+		} finally {
+			$zip->close();
+		}
+	}
+
+	public static function damagedPpmdHeaders(): array {
+		return ['incorrect CRC' => [14, 16, 0], 'understated size' => [22, 24, 1]];
+	}
+
 	public function testFindsCustomNameInFirstArchiveThatActuallyContainsIt(): void {
 		$this->archive('first.zip', ['17.epub' => 'standard']);
 		$this->archive('second.zip', ['named.epub' => 'custom']);
