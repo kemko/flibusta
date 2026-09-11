@@ -34,6 +34,31 @@ final class BookIndexTest extends TestCase {
 		$zip->close();
 	}
 
+	public function testLegacyZipIndexSkipsNonRangeNamesAndStillScansTheirContents(): void {
+		$this->dbh->exec('CREATE TABLE IF NOT EXISTS book_zip (filename text, start_id bigint, end_id bigint, usr smallint)');
+		foreach (['f.fb2-000001-000020.zip', 'f.n.000021-000030.zip', 'f.fb2-700000-788888_lost.zip', 'f.fb2-1-999999999999999999999.zip', 'f.fb2-30-20.zip'] as $name) {
+			$this->archive($name, ['42.fb2' => '<FictionBook/>']);
+		}
+		mkdir($this->directory . '/f.fb2-40-50.zip');
+		try {
+			$command = 'FLIBUSTA_BOOKS_DIR=' . escapeshellarg($this->directory) . ' ' . escapeshellarg(PHP_BINARY)
+				. ' ' . escapeshellarg(dirname(__DIR__) . '/tools/app_update_zip_list.php') . ' 2>&1';
+			exec($command, $output, $status);
+			self::assertSame(0, $status, implode("\n", $output));
+			$rows = $this->dbh->query('SELECT filename, start_id, end_id, usr FROM book_zip ORDER BY start_id')->fetchAll(PDO::FETCH_ASSOC);
+			self::assertCount(2, $rows);
+			self::assertSame('f.fb2-000001-000020.zip', $rows[0]['filename']);
+			self::assertSame(1, (int)$rows[0]['start_id']);
+			self::assertSame(20, (int)$rows[0]['end_id']);
+			self::assertSame(0, (int)$rows[0]['usr']);
+			self::assertSame(1, (int)$rows[1]['usr']);
+			self::assertSame(5, (int)$this->dbh->query('SELECT count(*) FROM book_archives')->fetchColumn());
+		} finally {
+			rmdir($this->directory . '/f.fb2-40-50.zip');
+			$this->dbh->exec('DELETE FROM book_zip');
+		}
+	}
+
 	public function testScansOnlyCompleteArchivesAndDoesNotReparseSuccessfulEntries(): void {
 		$this->archive('books.zip', ['42.fb2' => file_get_contents(__DIR__ . '/fixtures/books/namespaced.fb2')]);
 		file_put_contents($this->directory . '/upload.zip.part', 'incomplete');

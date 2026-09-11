@@ -4,38 +4,27 @@ require_once dirname(__DIR__) . '/dbinit.php';
 require_once __DIR__ . '/app_scan_books.php';
 
 if ($handle = opendir(flibusta_config()['directories']['books'])) {
-	$stmt = $dbh->prepare("TRUNCATE book_zip;");
-	$stmt->execute();
-
 	$dbh->beginTransaction();
+	$dbh->exec("TRUNCATE book_zip");
+	$stmt = $dbh->prepare("INSERT INTO book_zip (filename, start_id, end_id, usr) VALUES (:fn, :start, :end, :usr)");
 
-	while (false !== ($entry = readdir($handle))) {   
-		if (strpos($entry, "-") !== false && strpos($entry, ".zip") !== false && substr($entry, -9) !== ".zip.part") {
-        		$dt = str_replace(".zip", "", $entry);
-		        $dt = str_replace("f.n.", "f.n-", $dt);
-        		$dt = str_replace("f.fb2.", "f.n-", $dt);
-			echo "[$dt]";
-		        $fn = explode("-", $dt);
-			$u = 1;
-			if (strpos($entry, "fb2") !== false) {
-				$u = 0;
-			}
-			if (strpos($entry, "d.fb2-009") !== false) {
-			} else {
-				$stmt = $dbh->prepare("INSERT INTO book_zip (filename, start_id, end_id, usr) VALUES (:fn, :start, :end, :usr)");
-				$stmt->bindParam(":fn", $entry);
-				$stmt->bindParam(":start", $fn[1]);
-				$stmt->bindParam(":end", $fn[2]);
-				$stmt->bindParam(":usr", $u);
-				$stmt->execute();
-			}
+	while (false !== ($entry = readdir($handle))) {
+		// Only conventional range names belong in the legacy index; other ZIPs are scanned below.
+		if (!is_file(flibusta_config()['directories']['books'] . '/' . $entry)
+			|| !preg_match('/^[fd]\.(fb2|n)[.-]([0-9]+)-([0-9]+)\.zip$/D', $entry, $range)
+			|| str_starts_with($entry, 'd.fb2-009')) {
+			continue;
 		}
-		echo "\n";
+		$start = filter_var(ltrim($range[2], '0') ?: '0', FILTER_VALIDATE_INT);
+		$end = filter_var(ltrim($range[3], '0') ?: '0', FILTER_VALIDATE_INT);
+		if ($start === false || $end === false || $start > $end) {
+			continue;
+		}
+		$stmt->execute([':fn' => $entry, ':start' => $start, ':end' => $end, ':usr' => $range[1] === 'fb2' ? 0 : 1]);
 	}
 	$dbh->commit();
 	closedir($handle);
 }
 
-require_once __DIR__ . '/app_scan_books.php';
 book_index_scan_archives($dbh, flibusta_config()['directories']['books']);
 book_index_reconcile_entries($dbh);
