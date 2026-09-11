@@ -44,8 +44,6 @@ services:
             - '../../../FlibustaSQL:/application/sql'
             - '../../../phpdocker/php-fpm/php-ini-overrides.ini:/usr/local/etc/php/conf.d/local-custom.ini:ro'
             - '../../../phpdocker/php-fpm/php-fpm.conf:/usr/local/etc/php-fpm.d/zz-php-fpm.conf:ro'
-            - '../../../FlibustaSQL/lib.a.attached.zip:/application/cache/lib.a.attached.zip:ro'
-            - '../../../FlibustaSQL/lib.b.attached.zip:/application/cache/lib.b.attached.zip:ro'
         secrets:
             - FLIBUSTA_PWD
             - POSTGRES_ADMIN_PWD

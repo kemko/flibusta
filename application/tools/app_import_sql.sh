@@ -16,6 +16,18 @@ for dump in /application/sql/*.sql.gz; do
     fi
 done
 
+for name in lib.a.attached.zip lib.b.attached.zip; do
+    [ -f "/application/sql/$name" ] || continue
+    echo "Копирование $name в cache" >>/application/sql/status
+    if ! tmp=$(mktemp "/application/cache/.$name.XXXXXX") ||
+       ! cp "/application/sql/$name" "$tmp" ||
+       ! mv -f "$tmp" "/application/cache/$name"; then
+        rm -f "$tmp"
+        echo "Ошибка копирования $name. Импорт остановлен." >>/application/sql/status
+        exit 1
+    fi
+done
+
 /application/tools/app_topg lib.a.annotations_pics.sql
 /application/tools/app_topg lib.b.annotations_pics.sql
 /application/tools/app_topg lib.a.annotations.sql
