@@ -26,7 +26,7 @@ services:
             - ./application:/application:ro
             - ./README.md:/project/README.md:ro
             - ./phpdocker/pg/init_db.sql:/project/init_db.sql:ro
-            - ./docker-compose.yml:/project/docker-compose.yml:ro
+            - ./docker-compose.yml.sample:/project/docker-compose.yml.sample:ro
             - ./phpdocker/nginx/nginx.conf:/tmp/nginx.conf:ro
         environment:
             FLIBUSTA_DBTYPE: postgres
@@ -62,7 +62,7 @@ services:
             - php-fpm:127.0.0.1
         command: ["nginx", "-t"]
     epub-converter:
-        user: '82:82'
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: .
             dockerfile: phpdocker/worker/Dockerfile

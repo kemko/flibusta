@@ -1,5 +1,5 @@
 #!/bin/sh
-source /application/tools/dbinit.sh
+. /application/tools/dbinit.sh
 php /application/tools/app_migrate.php
 
 mkdir -p /application/sql/psql
@@ -8,7 +8,13 @@ mkdir -p /application/cache/covers
 mkdir -p /application/cache/tmp
 
 echo "Распаковка sql.gz">/application/sql/status
-gzip -f -d /application/sql/*.gz
+for dump in /application/sql/*.sql.gz; do
+    [ -f "$dump" ] || continue
+    if ! gzip -f -d "$dump" >>/application/sql/status 2>&1; then
+        echo "Ошибка распаковки $dump. Импорт остановлен." >>/application/sql/status
+        exit 1
+    fi
+done
 
 /application/tools/app_topg lib.a.annotations_pics.sql
 /application/tools/app_topg lib.b.annotations_pics.sql

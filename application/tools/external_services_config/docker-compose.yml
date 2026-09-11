@@ -1,13 +1,12 @@
 services:
     flibusta-fpm:
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: ../../..
             dockerfile: phpdocker/php-fpm/Dockerfile
         working_dir: /application
         container_name: flibusta-fpm
         environment:
-            PUID: ${APPUSER_PUID:-}
-            PGID: ${APPUSER_PGID:-}
             TZ: ${TIME_ZONE_VALUE:-UTC}
             FLIBUSTA_PUBLIC_URL: ${FLIBUSTA_PUBLIC_URL:-}
             FLIBUSTA_WEBROOT: ${FLIBUSTA_WEBROOT:-/mylib}
@@ -55,7 +54,7 @@ services:
             - FLIBUSTA_SMTP_PASSWORD
 
     book-worker:
-        user: '82:82'
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: ../../..
             dockerfile: phpdocker/php-fpm/Dockerfile
@@ -98,7 +97,7 @@ services:
         restart: unless-stopped
 
     compilation-converter:
-        user: '82:82'
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: ../../..
             dockerfile: phpdocker/worker/Dockerfile

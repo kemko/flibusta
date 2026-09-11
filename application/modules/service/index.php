@@ -76,7 +76,10 @@ echo flibusta_auth_post_form($webroot . '/service/', ['reindex' => 'metadata'], 
 echo "</div>";
 
 if ($status_import) {
-	$op = file_get_contents('/application/sql/status');;
+	$op = @file_get_contents('/application/sql/status');
+	if ($op === false) {
+		$op = 'Статус операции недоступен. Проверьте права пользователя PHP-FPM на каталог /application/sql и файл /application/sql/status.';
+	}
 	echo "<div class='d-flex align-items-center m-3'>";
 	echo nl2br($op);
 	echo "<div class='spinner-border ms-auto' role='status' aria-hidden='true'></div></div>";

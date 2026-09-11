@@ -2,7 +2,7 @@
 set -eu
 
 sh -n "$0"
-docker compose config --quiet
+docker compose -f docker-compose.yml.sample config --quiet
 docker compose -f docker-compose.test.yml config --quiet
 docker compose -f application/tools/external_services_config/docker-compose.yml config --quiet
 docker compose -f docker-compose.test.yml build test

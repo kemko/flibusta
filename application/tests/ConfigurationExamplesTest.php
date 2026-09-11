@@ -17,7 +17,7 @@ final class ConfigurationExamplesTest extends TestCase {
 	}
 
 	public function testMainAndExternalComposeExposeRequiredServicesAndSecrets(): void {
-		$main = $this->contents($this->root() . '/docker-compose.yml');
+		$main = $this->contents($this->root() . '/docker-compose.yml.sample');
 		$external = $this->contents($this->root() . '/application/tools/external_services_config/docker-compose.yml');
 		foreach (['book-worker:', 'compilation-converter:', 'FLIBUSTA_DBPASSWORD_FILE', 'FLIBUSTA_OIDC_CLIENT_SECRET_FILE', 'FLIBUSTA_OPDS_OWNER_HMAC_KEY_FILE', 'FLIBUSTA_SMTP_PASSWORD_FILE'] as $required) {
 			self::assertStringContainsString($required, $main);
@@ -26,8 +26,8 @@ final class ConfigurationExamplesTest extends TestCase {
 			self::assertStringContainsString($required, $external);
 		}
 		foreach ([$main, $external] as $compose) {
-			foreach (['book-worker', 'compilation-converter'] as $service) {
-				self::assertMatchesRegularExpression('/    ' . $service . ':\n        user: \'82:82\'/', $compose);
+			foreach (['book-worker', 'compilation-converter', $compose === $main ? 'php-fpm' : 'flibusta-fpm'] as $service) {
+				self::assertStringContainsString("    $service:\n        user: " . '\'${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}\'', $compose);
 			}
 		}
 	}

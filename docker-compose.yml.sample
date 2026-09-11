@@ -24,6 +24,7 @@ services:
             - '27100:80'
 
     php-fpm:
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: .
             dockerfile: phpdocker/php-fpm/Dockerfile
@@ -64,7 +65,7 @@ services:
             - FLIBUSTA_OPDS_OWNER_HMAC_KEY
 
     book-worker:
-        user: '82:82'
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: .
             dockerfile: phpdocker/php-fpm/Dockerfile
@@ -103,7 +104,7 @@ services:
         restart: unless-stopped
 
     compilation-converter:
-        user: '82:82'
+        user: '${APPUSER_PUID:-1026}:${APPUSER_PGID:-100}'
         build:
             context: .
             dockerfile: phpdocker/worker/Dockerfile
