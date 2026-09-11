@@ -118,13 +118,14 @@ services:
         tmpfs:
             - /tmp:rw,noexec,nosuid,size=768m
         entrypoint: ["/bin/sh", "-ec"]
-        command: >
-            while true; do
-            for job in /work/compilations/work/*; do
-            test -f "$$job/manifest.json" && php /application/tools/app_compilation_process.php "$$job" || true;
-            done;
-            sleep 2;
-            done
+        command:
+            - >
+                while true; do
+                for job in /work/compilations/work/*; do
+                test -f "$$job/manifest.json" && php /application/tools/app_compilation_process.php "$$job" || true;
+                done;
+                sleep 2;
+                done
         restart: unless-stopped
 
 
